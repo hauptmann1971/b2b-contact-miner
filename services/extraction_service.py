@@ -1,0 +1,205 @@
+import re
+from typing import List, Dict, Optional
+from email_validator import validate_email, EmailNotValidError
+from config.settings import settings
+from loguru import logger
+from models.schemas import ContactInfo
+
+
+class ExtractionService:
+    def __init__(self):
+        self.email_pattern = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+        self.mailto_pattern = re.compile(r'href=["\']mailto:([^"\']+)["\']', re.IGNORECASE)
+        self.telegram_pattern = re.compile(r'(?:https?://)?(?:t\.me|telegram\.me)/([a-zA-Z0-9_]+)')
+        self.linkedin_pattern = re.compile(r'(?:https?://)?(?:www\.)?linkedin\.com/(?:in|company)/([a-zA-Z0-9_-]+)')
+        self.phone_pattern = re.compile(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}')
+        
+        self.obfuscation_patterns = [
+            r'\[at\]', r'\(at\)', r' at ',
+            r'\[dot\]', r'\(dot\)', r' dot ',
+            r'{@}', r' {@} ',
+        ]
+    
+    def extract_contacts(self, content_list: List[Dict]) -> ContactInfo:
+        """Extract contacts with smart LLM fallback"""
+        emails = set()
+        telegram_links = set()
+        linkedin_links = set()
+        phone_numbers = set()
+        
+        needs_llm_fallback = False
+        llm_candidate_pages = []
+        
+        for item in content_list:
+            content = item.get("content", "")
+            url = item.get("url", "")
+            page_type = item.get("type", "")
+            
+            found_emails = self.email_pattern.findall(content)
+            for email in found_emails:
+                if self._is_valid_business_email(email):
+                    emails.add(email.lower())
+            
+            mailto_matches = self.mailto_pattern.finditer(content)
+            for match in mailto_matches:
+                email = match.group(1).strip()
+                email = email.split('?')[0]
+                if self._is_valid_business_email(email):
+                    emails.add(email.lower())
+            
+            has_obfuscation = any(re.search(pattern, content, re.IGNORECASE) 
+                                 for pattern in self.obfuscation_patterns)
+            
+            telegram_matches = self.telegram_pattern.finditer(content)
+            for match in telegram_matches:
+                telegram_links.add(f"https://t.me/{match.group(1)}")
+            
+            telegram_href = re.findall(r'href=["\']([^"\']*t\.me[^"\']*)["\']', content)
+            for link in telegram_href:
+                telegram_links.add(link)
+            
+            linkedin_matches = self.linkedin_pattern.finditer(content)
+            for match in linkedin_matches:
+                full_url = f"https://linkedin.com/in/{match.group(1)}" if '/' not in match.group(1) else match.group(0)
+                linkedin_links.add(full_url)
+            
+            phones = self.phone_pattern.findall(content)
+            for phone in phones:
+                cleaned = re.sub(r'[^\d+]', '', phone)
+                if len(cleaned) >= 10:
+                    phone_numbers.add(phone)
+            
+            if page_type == "contact_page" and has_obfuscation and len(emails) < 2:
+                llm_candidate_pages.append(content[:3000])
+                needs_llm_fallback = True
+        
+        if needs_llm_fallback and settings.USE_LLM_EXTRACTION:
+            logger.info(f"Applying LLM fallback for {len(llm_candidate_pages)} pages with obfuscated emails")
+            llm_contacts = self._extract_with_llm_selective(llm_candidate_pages)
+            
+            emails.update(llm_contacts.emails)
+            telegram_links.update(llm_contacts.telegram_links)
+            linkedin_links.update(llm_contacts.linkedin_links)
+        
+        filtered_emails = self._filter_blocked_emails(list(emails))
+        
+        logger.info(f"Extracted: {len(filtered_emails)} emails, {len(telegram_links)} Telegram, {len(linkedin_links)} LinkedIn")
+        
+        return ContactInfo(
+            emails=filtered_emails,
+            telegram_links=list(telegram_links),
+            linkedin_links=list(linkedin_links),
+            phone_numbers=list(phone_numbers)
+        )
+    
+    def _extract_with_llm_selective(self, obfuscated_contents: List[str]) -> ContactInfo:
+        """Use LLM only for pages with obfuscated emails"""
+        if not settings.OPENAI_API_KEY:
+            return ContactInfo()
+        
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            
+            combined_content = "\n\n--- PAGE SEPARATOR ---\n\n".join(obfuscated_contents)
+            
+            prompt = f"""
+            Extract contact information from website content with obfuscated emails.
+            Look for patterns like: name[at]domain.com, name (at) domain (dot) com, etc.
+            
+            Return ONLY valid business emails, Telegram usernames, and LinkedIn profiles.
+            Exclude: noreply@, support@, admin@, info@, webmaster@
+            
+            Content:
+            {combined_content[:4000]}
+            
+            Return JSON format:
+            {{
+                "emails": ["found@email.com"],
+                "telegram": ["username_or_link"],
+                "linkedin": ["profile_url"]
+            }}
+            """
+            
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=300
+            )
+            
+            import json
+            extracted = json.loads(response.choices[0].message.content)
+            
+            return ContactInfo(
+                emails=extracted.get("emails", []),
+                telegram_links=extracted.get("telegram", []),
+                linkedin_links=extracted.get("linkedin", []),
+                phone_numbers=[]
+            )
+        except Exception as e:
+            logger.error(f"LLM extraction failed: {e}")
+            return ContactInfo()
+    
+    def verify_mx_domain(self, email: str) -> bool:
+        """Check if email domain has MX records (DNS verification)"""
+        try:
+            import dns.resolver
+            domain = email.split('@')[1]
+            records = dns.resolver.resolve(domain, 'MX')
+            return len(records) > 0
+        except Exception as e:
+            logger.debug(f"MX verification failed for {email}: {e}")
+            return False
+    
+    async def batch_verify_emails(self, emails: List[str]) -> Dict[str, bool]:
+        """Batch verify multiple emails via MX records"""
+        results = {}
+        for email in emails:
+            is_valid = self.verify_mx_domain(email)
+            results[email] = is_valid
+            logger.debug(f"Email {email}: MX {'valid' if is_valid else 'invalid'}")
+        return results
+    
+    def _is_valid_business_email(self, email: str) -> bool:
+        """Validate email format"""
+        try:
+            valid = validate_email(email)
+            email_lower = email.lower()
+            
+            for pattern in settings.BLOCKED_EMAIL_PATTERNS:
+                if re.match(pattern, email_lower):
+                    return False
+            
+            free_providers = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'mail.ru', 'yandex.ru']
+            domain = email_lower.split('@')[1]
+            if domain in free_providers:
+                return False
+            
+            return True
+        except EmailNotValidError:
+            return False
+    
+    def _filter_blocked_emails(self, emails: List[str]) -> List[str]:
+        """Remove blocked emails"""
+        return [email for email in emails if self._is_valid_business_email(email)]
+    
+    def calculate_confidence(self, contacts: ContactInfo) -> int:
+        """Calculate confidence score"""
+        score = 0
+        
+        if len(contacts.emails) > 0:
+            score += 40
+            if len(contacts.emails) > 1:
+                score += 10
+        
+        if len(contacts.telegram_links) > 0:
+            score += 25
+        
+        if len(contacts.linkedin_links) > 0:
+            score += 25
+        
+        if len(contacts.phone_numbers) > 0:
+            score += 10
+        
+        return min(score, 100)

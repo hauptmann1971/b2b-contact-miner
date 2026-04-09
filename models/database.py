@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, JSON, ForeignKey, Index, Enum
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, JSON, ForeignKey, Index, Enum, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -7,7 +7,14 @@ import enum
 
 Base = declarative_base()
 
-engine = create_engine(settings.DATABASE_URL, pool_size=20, max_overflow=30)
+# MySQL connection with pool settings
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_size=20,
+    max_overflow=30,
+    pool_recycle=3600,  # MySQL closes idle connections after 8 hours
+    echo=False
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -21,7 +28,7 @@ class ContactType(enum.Enum):
 class Keyword(Base):
     __tablename__ = "keywords"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     keyword = Column(String(500), unique=True, nullable=False, index=True)
     language = Column(String(10), nullable=False, default="ru")
     country = Column(String(5), nullable=False, default="RU")
@@ -36,9 +43,9 @@ class Keyword(Base):
 class SearchResult(Base):
     __tablename__ = "search_results"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     keyword_id = Column(Integer, ForeignKey("keywords.id"), nullable=False)
-    url = Column(String(2000), nullable=False, index=True)
+    url = Column(String(768), nullable=False, index=True)  # Reduced for MySQL index limit (768 * 4 bytes = 3072)
     title = Column(String(1000))
     snippet = Column(Text)
     position = Column(Integer)
@@ -49,18 +56,18 @@ class SearchResult(Base):
     domain_contacts = relationship("DomainContact", back_populates="search_result")
     
     __table_args__ = (
-        Index('idx_keyword_url', 'keyword_id', 'url', unique=True),
+        Index('idx_keyword_url', 'keyword_id', text('url(255)'), unique=True, mysql_length={'url': 255}),
     )
 
 
 class DomainContact(Base):
     __tablename__ = "domain_contacts"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=False)
     domain = Column(String(500), nullable=False, index=True)
     tags = Column(JSON, default=list)
-    metadata = Column(JSON, default=dict)
+    site_metadata = Column("metadata", JSON, default=dict)  # Rename to avoid SQLAlchemy reserved word
     extraction_method = Column(String(50))
     confidence_score = Column(Integer, default=0)
     is_verified = Column(Boolean, default=False)
@@ -79,7 +86,7 @@ class Contact(Base):
     """Normalized contact table for efficient search"""
     __tablename__ = "contacts"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     domain_contact_id = Column(Integer, ForeignKey("domain_contacts.id"), nullable=False)
     contact_type = Column(Enum(ContactType), nullable=False)
     value = Column(String(500), nullable=False, index=True)
@@ -99,7 +106,7 @@ class Contact(Base):
 class CrawlLog(Base):
     __tablename__ = "crawl_logs"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     domain = Column(String(500), nullable=False, index=True)
     url = Column(String(2000))
     status_code = Column(Integer)
@@ -113,7 +120,7 @@ class PipelineState(Base):
     """Checkpoint for monitoring progress"""
     __tablename__ = "pipeline_state"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     run_id = Column(String(100), nullable=False, index=True, unique=True)
     keyword_id = Column(Integer, ForeignKey("keywords.id"))
     status = Column(String(50), default="pending")

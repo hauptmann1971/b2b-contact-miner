@@ -16,9 +16,22 @@ class Settings(BaseSettings):
     BRIGHTDATA_API_KEY: str = ""
     SCRAPERAPI_KEY: str = ""
     
-    # LLM Fallback (optional)
+    # LLM Configuration
     OPENAI_API_KEY: str = ""
-    USE_LLM_EXTRACTION: bool = False
+    USE_OPENAI: bool = False
+    
+    DEEPSEEK_API_KEY: str = ""
+    USE_DEEPSEEK: bool = False
+    
+    GIGACHAT_CLIENT_ID: str = ""
+    GIGACHAT_CLIENT_SECRET: str = ""
+    USE_GIGACHAT: bool = False
+    
+    YANDEX_IAM_TOKEN: str = ""
+    YANDEX_FOLDER_ID: str = ""
+    USE_YANDEXGPT: bool = True
+    
+    USE_LLM_EXTRACTION: bool = True
     
     # Crawler Settings
     MAX_PAGES_PER_DOMAIN: int = 10
@@ -46,7 +59,7 @@ class Settings(BaseSettings):
         r"^no-reply@",
         r"^donotreply@",
         r"^support@",
-        r"^info@",
+        # r"^info@",  # info@ is often a valid business contact
         r"^admin@",
         r"^webmaster@",
         r"^postmaster@",

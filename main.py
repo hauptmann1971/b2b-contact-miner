@@ -15,6 +15,8 @@ from datetime import datetime
 import time
 from urllib.parse import urlparse
 import sys
+import traceback
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Configure logging format
 if settings.LOG_FORMAT == "json":
@@ -90,22 +92,46 @@ class ContactMiningPipeline:
             websites_processed = 0
             contacts_found = 0
             
-            for idx, keyword in enumerate(pending_keywords):
+            for idx, keyword in enumerate(pending_keywords, 1):
                 try:
+                    logger.info(f"\n{'='*80}")
+                    logger.info(f"Processing keyword [{idx}/{len(pending_keywords)}]: {keyword.keyword}")
+                    logger.info(f"{'='*80}")
+                    
                     result = await self._process_keyword(db, keyword_service, keyword)
                     websites_processed += result.get("websites", 0)
                     contacts_found += result.get("contacts", 0)
                     
-                    self.state_manager.update_progress(
-                        keyword.id, 
-                        websites_processed, 
-                        contacts_found,
-                        total_websites
-                    )
+                    logger.info(f"\n📊 Progress: {idx}/{len(pending_keywords)} keywords")
+                    logger.info(f"   Total websites: {websites_processed}")
+                    logger.info(f"   Total contacts: {contacts_found}")
                     
+                    # Update progress with retry
+                    try:
+                        self.state_manager.update_progress(
+                            keyword.id, 
+                            websites_processed, 
+                            contacts_found,
+                            total_websites
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to update progress: {e}")
+                    
+                except KeyboardInterrupt:
+                    logger.warning("\n⚠️  Pipeline interrupted by user")
+                    break
                 except Exception as e:
-                    logger.error(f"Error processing keyword {keyword.id}: {e}")
-                    self.state_manager.mark_failed(keyword.id, str(e))
+                    logger.error(f"\n❌ Unexpected error processing keyword {keyword.id}: {e}")
+                    logger.debug(traceback.format_exc())
+                    
+                    # Mark as failed but continue with next keyword
+                    try:
+                        self.state_manager.mark_failed(keyword.id, str(e))
+                    except:
+                        pass
+                    
+                    # Continue with next keyword instead of crashing
+                    logger.info("Continuing with next keyword...")
                     continue
             
             logger.info(f"Pipeline completed: {websites_processed} websites, {contacts_found} contacts")
@@ -115,30 +141,31 @@ class ContactMiningPipeline:
             await self.shutdown()
     
     async def _process_keyword(self, db: Session, keyword_service: KeywordService, keyword) -> dict:
-        """Process a single keyword"""
+        """Process a single keyword with error handling and retry"""
         logger.info(f"Processing keyword: {keyword.keyword} ({keyword.language})")
         
         websites_processed = 0
         contacts_found = 0
         
         try:
-            search_results = self.serp.search(
-                query=keyword.keyword,
-                country=keyword.country,
-                language=keyword.language,
-                num_results=10
-            )
+            # Retry search if it fails
+            search_results = await self._retry_search(keyword)
             
             if not search_results:
+                logger.warning(f"No search results for keyword: {keyword.keyword}")
                 keyword_service.mark_as_processed(keyword.id)
                 return {"websites": 0, "contacts": 0}
             
-            self.serp.save_results(db, keyword.id, search_results)
+            # Save search results with retry
+            await self._retry_save_results(db, keyword.id, search_results)
             
-            for result in search_results[:5]:
+            # Process each search result
+            for idx, result in enumerate(search_results[:5], 1):
                 try:
+                    logger.info(f"[{idx}/5] Processing: {result['url'][:70]}")
+                    
                     if not self.robots_checker.can_fetch(result["url"]):
-                        logger.info(f"Skipping (robots.txt): {result['url']}")
+                        logger.info(f"Skipping (robots.txt): {result['url'][:70]}")
                         continue
                     
                     contacts = await self._process_search_result(db, result)
@@ -146,19 +173,85 @@ class ContactMiningPipeline:
                         contacts_found += len(contacts.emails) + len(contacts.telegram_links)
                     
                     websites_processed += 1
+                    logger.info(f"✓ Completed [{idx}/5]: {result['url'][:50]}...")
                     
                 except Exception as e:
-                    logger.error(f"Error processing URL {result['url']}: {e}")
+                    logger.error(f"✗ Error processing URL {result['url']}: {e}")
+                    logger.debug(traceback.format_exc())
+                    # Continue with next URL instead of failing entire keyword
                     continue
             
-            keyword_service.mark_as_processed(keyword.id)
-            self.state_manager.mark_keyword_completed(keyword.id, contacts_found)
+            # Mark as processed even if some URLs failed
+            try:
+                keyword_service.mark_as_processed(keyword.id)
+                self.state_manager.mark_keyword_completed(keyword.id, contacts_found)
+                logger.info(f"✅ Keyword completed: {websites_processed} websites, {contacts_found} contacts")
+            except Exception as e:
+                logger.error(f"Failed to mark keyword as processed: {e}")
+                # Don't raise - keyword was still processed
             
         except Exception as e:
-            logger.error(f"Keyword processing failed: {e}")
-            raise
+            logger.error(f"❌ Keyword processing failed: {keyword.keyword}")
+            logger.error(f"Error: {e}")
+            logger.debug(traceback.format_exc())
+            
+            # Mark as failed but don't crash the pipeline
+            try:
+                self.state_manager.mark_failed(keyword.id, str(e))
+            except:
+                pass
+            
+            # Return partial results
+            return {"websites": websites_processed, "contacts": contacts_found}
         
         return {"websites": websites_processed, "contacts": contacts_found}
+    
+    async def _retry_search(self, keyword, max_retries=3):
+        """Search with retry logic"""
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"Searching (attempt {attempt}/{max_retries})...")
+                search_results = self.serp.search(
+                    query=keyword.keyword,
+                    country=keyword.country,
+                    language=keyword.language,
+                    num_results=10
+                )
+                logger.info(f"✓ Search successful: {len(search_results)} results")
+                return search_results
+            except Exception as e:
+                logger.warning(f"Search attempt {attempt} failed: {e}")
+                if attempt < max_retries:
+                    wait_time = 2 ** attempt  # Exponential backoff: 2s, 4s, 8s
+                    logger.info(f"Retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"❌ Search failed after {max_retries} attempts")
+                    return []
+    
+    async def _retry_save_results(self, db, keyword_id, search_results, max_retries=3):
+        """Save search results with retry logic"""
+        for attempt in range(1, max_retries + 1):
+            try:
+                self.serp.save_results(db, keyword_id, search_results)
+                logger.info(f"✓ Saved {len(search_results)} search results")
+                return
+            except Exception as e:
+                logger.warning(f"Save attempt {attempt} failed: {e}")
+                if attempt < max_retries:
+                    # Try to recreate DB session
+                    try:
+                        db.close()
+                    except:
+                        pass
+                    db = SessionLocal()
+                    
+                    wait_time = 2 ** attempt
+                    logger.info(f"Retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"❌ Failed to save results after {max_retries} attempts")
+                    # Don't raise - continue with crawling even if save failed
     
     async def _process_search_result(self, db: Session, search_result: dict):
         """Crawl and extract contacts"""

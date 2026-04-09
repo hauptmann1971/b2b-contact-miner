@@ -13,6 +13,12 @@ engine = create_engine(
     pool_size=20,
     max_overflow=30,
     pool_recycle=3600,  # MySQL closes idle connections after 8 hours
+    pool_pre_ping=True,  # Verify connections before using them
+    connect_args={
+        "connect_timeout": 60,  # Connection timeout in seconds
+        "read_timeout": 120,    # Read timeout in seconds
+        "write_timeout": 120    # Write timeout in seconds
+    },
     echo=False
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

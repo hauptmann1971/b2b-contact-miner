@@ -94,13 +94,19 @@ class ExtractionService:
     
     def _extract_with_llm_selective(self, obfuscated_contents: List[str]) -> ContactInfo:
         """Use LLM only for pages with obfuscated emails"""
-        if not settings.OPENAI_API_KEY:
+        # Determine which LLM to use (priority: YandexGPT > GigaChat > DeepSeek > OpenAI)
+        if settings.USE_YANDEXGPT and settings.YANDEX_IAM_TOKEN and settings.YANDEX_FOLDER_ID:
+            llm_type = "yandexgpt"
+        elif settings.USE_GIGACHAT and settings.GIGACHAT_CLIENT_ID and settings.GIGACHAT_CLIENT_SECRET:
+            llm_type = "gigachat"
+        elif settings.USE_DEEPSEEK and settings.DEEPSEEK_API_KEY:
+            llm_type = "deepseek"
+        elif settings.USE_OPENAI and settings.OPENAI_API_KEY:
+            llm_type = "openai"
+        else:
             return ContactInfo()
         
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            
             combined_content = "\n\n--- PAGE SEPARATOR ---\n\n".join(obfuscated_contents)
             
             prompt = f"""
@@ -121,15 +127,89 @@ class ExtractionService:
             }}
             """
             
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=300
-            )
+            # Call appropriate LLM
+            if llm_type == "yandexgpt":
+                import requests
+                import json
+                
+                url = f"https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+                
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-folder-id": settings.YANDEX_FOLDER_ID
+                }
+                
+                # Use IAM token or API key
+                if settings.YANDEX_IAM_TOKEN and settings.YANDEX_IAM_TOKEN != "your_yandex_iam_token":
+                    headers["Authorization"] = f"Bearer {settings.YANDEX_IAM_TOKEN}"
+                else:
+                    # Fallback to API key (if provided)
+                    raise Exception("YANDEX_IAM_TOKEN is required for YandexGPT")
+                
+                payload = {
+                    "modelUri": f"gpt://{settings.YANDEX_FOLDER_ID}/yandexgpt/latest",
+                    "completionOptions": {
+                        "stream": False,
+                        "temperature": 0.1,
+                        "maxTokens": "300"
+                    },
+                    "messages": [
+                        {"role": "user", "text": prompt}
+                    ]
+                }
+                
+                response = requests.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                content = result["result"]["alternatives"][0]["message"]["text"]
+                
+            elif llm_type == "gigachat":
+                from gigachat import GigaChat
+                
+                gc = GigaChat(
+                    credentials=settings.GIGACHAT_CLIENT_ID,
+                    client_secret=settings.GIGACHAT_CLIENT_SECRET,
+                    verify_ssl_certs=False,
+                    scope="GIGACHAT_API_PERS"
+                )
+                
+                response = gc.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=300
+                )
+                
+                content = response.choices[0].message.content
+                
+            elif llm_type == "deepseek":
+                from openai import OpenAI
+                client = OpenAI(
+                    api_key=settings.DEEPSEEK_API_KEY,
+                    base_url="https://api.deepseek.com/v1"
+                )
+                
+                response = client.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=300
+                )
+                content = response.choices[0].message.content
+                
+            else:  # openai
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=300
+                )
+                content = response.choices[0].message.content
             
             import json
-            extracted = json.loads(response.choices[0].message.content)
+            extracted = json.loads(content)
             
             return ContactInfo(
                 emails=extracted.get("emails", []),

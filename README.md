@@ -43,14 +43,28 @@ pytest tests/ -v
 pytest tests/ --cov=services --cov=utils --cov-report=html
 ```
 
-### 3. База данных
+### 3. База данных (MySQL)
 
-Установите PostgreSQL и создайте базу:
+Установите MySQL 8.0+ и создайте базу:
+
+```bash
+# Способ 1: Через MySQL CLI
+mysql -u root -p < setup_mysql.sql
+
+# Способ 2: Вручную
+mysql -u root -p
+```
 
 ```sql
-CREATE DATABASE contact_miner;
-CREATE USER miner WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE contact_miner TO miner;
+CREATE DATABASE contact_miner CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'miner'@'localhost' IDENTIFIED BY 'your_password';
+GRANT ALL PRIVILEGES ON contact_miner.* TO 'miner'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+**Проверка подключения:**
+```bash
+python test_mysql_connection.py
 ```
 
 ### 4. Redis
@@ -71,10 +85,13 @@ cp .env.example .env
 # Отредактируйте .env с вашими API ключами
 ```
 
-### 6. Инициализация БД
+### 6. Инициализация таблиц БД
 
 ```bash
 python -c "from models.database import init_db; init_db()"
+
+# Или используйте тестовый скрипт
+python test_mysql_connection.py
 ```
 
 ## Использование

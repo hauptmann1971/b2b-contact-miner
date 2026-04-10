@@ -41,6 +41,7 @@ dnspython==2.4.2
 # Monitoring & API
 fastapi==0.109.0
 uvicorn==0.27.0
+flask==3.0.0
 loguru==0.7.2
 prometheus-client==0.19.0
 

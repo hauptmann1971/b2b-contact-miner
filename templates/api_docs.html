@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - B2B Contact Miner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            color: #667eea;
+            font-size: 2em;
+        }
+        
+        .back-link {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: transform 0.2s;
+        }
+        
+        .back-link:hover {
+            transform: translateY(-2px);
+        }
+        
+        .api-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .api-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .endpoint-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s;
+        }
+        
+        .endpoint-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .endpoint-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .endpoint-name {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .method-badge {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 5px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .endpoint-path {
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+        
+        .endpoint-description {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        
+        .response-section {
+            margin-top: 15px;
+        }
+        
+        .response-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        
+        .try-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 500;
+            transition: transform 0.2s;
+            margin-top: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .try-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .response-display {
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .response-display.active {
+            display: block;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📡 API Documentation</h1>
+            <a href="/" class="back-link">← На главную</a>
+        </header>
+        
+        <div class="api-section">
+            <h2>🔍 Health Check Endpoints</h2>
+            
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="endpoint-name">Полная проверка здоровья</span>
+                    <span class="method-badge">GET</span>
+                </div>
+                <div class="endpoint-path">/health</div>
+                <p class="endpoint-description">
+                    Возвращает статус всех сервисов системы (база данных, Redis и др.)
+                </p>
+                <div class="response-section">
+                    <div class="response-label">Пример ответа:</div>
+                    <pre>{
+  "status": "healthy",
+  "timestamp": "2026-04-10T15:30:00",
+  "services": {
+    "database": "healthy",
+    "redis": "healthy"
+  }
+}</pre>
+                </div>
+                <a href="/health" target="_blank" class="try-btn">Попробовать →</a>
+            </div>
+            
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="endpoint-name">Проверка живости</span>
+                    <span class="method-badge">GET</span>
+                </div>
+                <div class="endpoint-path">/health/live</div>
+                <p class="endpoint-description">
+                    Быстрая проверка, что приложение запущено и отвечает на запросы
+                </p>
+                <div class="response-section">
+                    <div class="response-label">Пример ответа:</div>
+                    <pre>{
+  "status": "alive",
+  "timestamp": "2026-04-10T15:30:00"
+}</pre>
+                </div>
+                <a href="/health/live" target="_blank" class="try-btn">Попробовать →</a>
+            </div>
+            
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="endpoint-name">Проверка готовности</span>
+                    <span class="method-badge">GET</span>
+                </div>
+                <div class="endpoint-path">/health/ready</div>
+                <p class="endpoint-description">
+                    Проверяет подключение к базе данных и готовность обрабатывать запросы
+                </p>
+                <div class="response-section">
+                    <div class="response-label">Пример ответа:</div>
+                    <pre>{
+  "status": "ready",
+  "timestamp": "2026-04-10T15:30:00"
+}</pre>
+                </div>
+                <a href="/health/ready" target="_blank" class="try-btn">Попробовать →</a>
+            </div>
+        </div>
+        
+        <div class="api-section">
+            <h2>📊 Data API Endpoints</h2>
+            
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="endpoint-name">Статистика системы</span>
+                    <span class="method-badge">GET</span>
+                </div>
+                <div class="endpoint-path">/api/stats</div>
+                <p class="endpoint-description">
+                    Возвращает полную статистику по ключевым словам, доменам и контактам с разбивкой по типам
+                </p>
+                <div class="response-section">
+                    <div class="response-label">Пример ответа:</div>
+                    <pre>{
+  "total_keywords": 15,
+  "processed_keywords": 10,
+  "total_domains": 45,
+  "total_contacts": 120,
+  "contacts_by_type": {
+    "email": 80,
+    "telegram": 20,
+    "linkedin": 15,
+    "phone": 5
+  }
+}</pre>
+                </div>
+                <button onclick="loadStats()" class="try-btn">Загрузить данные</button>
+                <div id="stats-display" class="response-display"></div>
+            </div>
+            
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="endpoint-name">Список ключевых слов</span>
+                    <span class="method-badge">GET</span>
+                </div>
+                <div class="endpoint-path">/api/keywords</div>
+                <p class="endpoint-description">
+                    Возвращает массив всех ключевых слов с полной информацией о каждом
+                </p>
+                <div class="response-section">
+                    <div class="response-label">Пример ответа:</div>
+                    <pre>[
+  {
+    "id": 1,
+    "keyword": "финтех стартап",
+    "language": "ru",
+    "country": "RU",
+    "is_processed": true,
+    "last_crawled_at": "2026-04-10T15:30:00",
+    "created_at": "2026-04-09T10:00:00"
+  }
+]</pre>
+                </div>
+                <button onclick="loadKeywords()" class="try-btn">Загрузить данные</button>
+                <div id="keywords-display" class="response-display"></div>
+            </div>
+        </div>
+        
+        <div class="api-section">
+            <h2>💡 Использование API</h2>
+            <div class="endpoint-card">
+                <p class="endpoint-description">
+                    <strong>Из JavaScript:</strong><br>
+                    <code>fetch('/api/stats').then(r => r.json()).then(data => console.log(data))</code>
+                </p>
+                <p class="endpoint-description" style="margin-top: 15px;">
+                    <strong>Из Python:</strong><br>
+                    <code>import requests<br>response = requests.get('http://localhost:5000/api/stats')</code>
+                </p>
+                <p class="endpoint-description" style="margin-top: 15px;">
+                    <strong>Из curl:</strong><br>
+                    <code>curl http://localhost:5000/api/stats</code>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function loadStats() {
+            const display = document.getElementById('stats-display');
+            display.classList.add('active');
+            display.innerHTML = '<p style="color: #666;">Загрузка...</p>';
+            
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    let html = '<div class="stats-grid">';
+                    html += '<div class="stat-item"><div class="stat-value">' + data.total_keywords + '</div><div class="stat-label">Ключевых слов</div></div>';
+                    html += '<div class="stat-item"><div class="stat-value">' + data.processed_keywords + '</div><div class="stat-label">Обработано</div></div>';
+                    html += '<div class="stat-item"><div class="stat-value">' + data.total_domains + '</div><div class="stat-label">Доменов</div></div>';
+                    html += '<div class="stat-item"><div class="stat-value">' + data.total_contacts + '</div><div class="stat-label">Контактов</div></div>';
+                    html += '</div>';
+                    
+                    html += '<div class="stats-grid" style="margin-top: 15px;">';
+                    for (const [type, count] of Object.entries(data.contacts_by_type)) {
+                        const icon = type === 'email' ? '📧' : type === 'telegram' ? '✈️' : type === 'linkedin' ? '💼' : '📱';
+                        html += '<div class="stat-item"><div class="stat-value">' + icon + ' ' + count + '</div><div class="stat-label">' + type.charAt(0).toUpperCase() + type.slice(1) + '</div></div>';
+                    }
+                    html += '</div>';
+                    
+                    html += '<pre style="margin-top: 15px;">' + JSON.stringify(data, null, 2) + '</pre>';
+                    display.innerHTML = html;
+                })
+                .catch(error => {
+                    display.innerHTML = '<p style="color: #dc3545;">Ошибка: ' + error.message + '</p>';
+                });
+        }
+        
+        function loadKeywords() {
+            const display = document.getElementById('keywords-display');
+            display.classList.add('active');
+            display.innerHTML = '<p style="color: #666;">Загрузка...</p>';
+            
+            fetch('/api/keywords')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length === 0) {
+                        display.innerHTML = '<p style="color: #666;">Нет ключевых слов в базе данных</p><pre>[]</pre>';
+                        return;
+                    }
+                    
+                    let html = '<p style="margin-bottom: 10px;"><strong>Всего ключевых слов: ' + data.length + '</strong></p>';
+                    html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                    display.innerHTML = html;
+                })
+                .catch(error => {
+                    display.innerHTML = '<p style="color: #dc3545;">Ошибка: ' + error.message + '</p>';
+                });
+        }
+    </script>
+</body>
+</html>

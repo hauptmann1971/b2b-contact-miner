@@ -20,9 +20,9 @@ app = FastAPI(title="Contact Miner Health Check", version="1.0.0")
 # Enable CORS for Flask web server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*", "http://localhost:5000", "http://127.0.0.1:5000"],  # Allows all origins
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
 

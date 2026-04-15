@@ -18,11 +18,20 @@ import sys
 import traceback
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-# Configure logging format
+# Configure logging
+logger.remove()  # Удаляем handler по умолчанию
+
+log_level = getattr(settings, 'LOG_LEVEL', 'INFO').upper()
+
 if settings.LOG_FORMAT == "json":
-    logger.remove()
-    logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name} | {message}", serialize=True)
+    log_format = "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name} | {message}"
+    logger.add(sys.stdout, format=log_format, serialize=True, level=log_level)
     logger.info("JSON logging enabled")
+else:
+    log_format = "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+    logger.add(sys.stdout, format=log_format, level=log_level)
+
+logger.info(f"Log level set to {log_level}")
 
 
 class ContactMiningPipeline:
@@ -76,29 +85,32 @@ class ContactMiningPipeline:
         
         await self.initialize()
         
+        # Создаем сессию для получения списка ключевых слов
         db = SessionLocal()
         try:
             keyword_service = KeywordService(db)
             self.state_manager.create_run()
             
-            pending_keywords = keyword_service.get_pending_keywords(limit=50)
+            pending_keywords = keyword_service.get_pending_keywords(limit=settings.MAX_KEYWORDS_PER_RUN)
             logger.info(f"Found {len(pending_keywords)} pending keywords")
             
             if not pending_keywords:
                 logger.info("No pending keywords to process")
                 return
             
-            total_websites = len(pending_keywords) * 5
+            total_websites = len(pending_keywords) * settings.SEARCH_RESULTS_PER_KEYWORD
             websites_processed = 0
             contacts_found = 0
             
             for idx, keyword in enumerate(pending_keywords, 1):
+                # Для каждого ключевого слова создаем отдельную сессию БД
+                keyword_db = SessionLocal()
                 try:
                     logger.info(f"\n{'='*80}")
                     logger.info(f"Processing keyword [{idx}/{len(pending_keywords)}]: {keyword.keyword}")
                     logger.info(f"{'='*80}")
                     
-                    result = await self._process_keyword(db, keyword_service, keyword)
+                    result = await self._process_keyword(keyword_db, keyword_service, keyword)
                     websites_processed += result.get("websites", 0)
                     contacts_found += result.get("contacts", 0)
                     
@@ -133,6 +145,9 @@ class ContactMiningPipeline:
                     # Continue with next keyword instead of crashing
                     logger.info("Continuing with next keyword...")
                     continue
+                finally:
+                    # Закрываем сессию для текущего ключевого слова
+                    keyword_db.close()
             
             logger.info(f"Pipeline completed: {websites_processed} websites, {contacts_found} contacts")
         
@@ -160,9 +175,9 @@ class ContactMiningPipeline:
             await self._retry_save_results(db, keyword.id, search_results)
             
             # Process each search result
-            for idx, result in enumerate(search_results[:5], 1):
+            for idx, result in enumerate(search_results[:settings.SEARCH_RESULTS_PER_KEYWORD], 1):
                 try:
-                    logger.info(f"[{idx}/5] Processing: {result['url'][:70]}")
+                    logger.info(f"[{idx}/{settings.SEARCH_RESULTS_PER_KEYWORD}] Processing: {result['url'][:70]}")
                     
                     if not self.robots_checker.can_fetch(result["url"]):
                         logger.info(f"Skipping (robots.txt): {result['url'][:70]}")
@@ -173,7 +188,7 @@ class ContactMiningPipeline:
                         contacts_found += len(contacts.emails) + len(contacts.telegram_links)
                     
                     websites_processed += 1
-                    logger.info(f"✓ Completed [{idx}/5]: {result['url'][:50]}...")
+                    logger.info(f"✓ Completed [{idx}/{settings.SEARCH_RESULTS_PER_KEYWORD}]: {result['url'][:50]}...")
                     
                 except Exception as e:
                     logger.error(f"✗ Error processing URL {result['url']}: {e}")

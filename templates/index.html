@@ -239,6 +239,67 @@
             background: #667eea;
             color: white;
         }
+        
+        /* Health Check Styles */
+        .health-status-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .health-status-card.healthy {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        
+        .health-status-card.unhealthy {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        
+        .health-service-name {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .health-badge {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        .health-badge.healthy {
+            background: #28a745;
+            color: white;
+        }
+        
+        .health-badge.unhealthy {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 500;
+            transition: transform 0.2s;
+        }
+        
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -362,8 +423,18 @@
             {% else %}
             <p style="color: #666; text-align: center; padding: 20px;">Пока нет ключевых слов. Добавьте первое!</p>
             {% endif %}
-            
-            <div class="nav-links">
+        </div>
+        
+        <!-- Health Check Monitoring Section -->
+        <div class="recent-keywords" style="margin-top: 30px;">
+            <h2>🖥️ Мониторинг системы (FastAPI)</h2>
+            <div id="fastapi-health-status" style="padding: 20px;">
+                <p style="color: #666; text-align: center;">Загрузка статуса сервисов...</p>
+            </div>
+            <button onclick="loadFastAPIHealth()" class="refresh-btn" style="margin-top: 15px;">🔄 Обновить статус</button>
+        </div>
+        
+        <div class="nav-links">
                 <a href="{{ url_for('keywords_list') }}" class="nav-link">Все ключевые слова</a>
                 <a href="{{ url_for('contacts_list') }}" class="nav-link">Все контакты</a>
                 <a href="{{ url_for('health_check_page') }}" class="nav-link">💚 Health Check</a>
@@ -371,5 +442,64 @@
             </div>
         </div>
     </div>
+    
+    <script>
+        // Load FastAPI Health Status
+        function loadFastAPIHealth() {
+            const statusDiv = document.getElementById('fastapi-health-status');
+            statusDiv.innerHTML = '<p style="color: #666; text-align: center;">Загрузка...</p>';
+            
+            fetch('http://localhost:8000/health')
+                .then(response => response.json())
+                .then(data => {
+                    let html = '';
+                    
+                    // Overall status
+                    const overallClass = data.status === 'healthy' ? 'healthy' : 'unhealthy';
+                    const overallText = data.status === 'healthy' ? '✓ Система работает нормально' : '✗ Обнаружены проблемы';
+                    html += `<div class="health-status-card ${overallClass}" style="margin-bottom: 15px;">`;
+                    html += `<span class="health-service-name">Общий статус</span>`;
+                    html += `<span class="health-badge ${overallClass}">${overallText}</span>`;
+                    html += `</div>`;
+                    
+                    // Individual services
+                    if (data.services) {
+                        for (const [service, status] of Object.entries(data.services)) {
+                            const serviceClass = status === 'healthy' ? 'healthy' : 'unhealthy';
+                            const serviceName = service.charAt(0).toUpperCase() + service.slice(1);
+                            const statusText = status === 'healthy' ? '✓ Работает' : '✗ Не работает';
+                            
+                            html += `<div class="health-status-card ${serviceClass}">`;
+                            html += `<span class="health-service-name">${serviceName}</span>`;
+                            html += `<span class="health-badge ${serviceClass}">${statusText}</span>`;
+                            html += `</div>`;
+                        }
+                    }
+                    
+                    // Timestamp
+                    if (data.timestamp) {
+                        const timestamp = new Date(data.timestamp).toLocaleString('ru-RU');
+                        html += `<p style="color: #666; font-size: 0.9em; margin-top: 10px; text-align: center;">Последняя проверка: ${timestamp}</p>`;
+                    }
+                    
+                    statusDiv.innerHTML = html;
+                })
+                .catch(error => {
+                    statusDiv.innerHTML = `
+                        <div class="health-status-card unhealthy">
+                            <span class="health-service-name">Ошибка подключения</span>
+                            <span class="health-badge unhealthy">✗ Недоступно</span>
+                        </div>
+                        <p style="color: #dc3545; margin-top: 10px; text-align: center;">
+                            Не удалось подключиться к FastAPI серверу (порт 8000)<br>
+                            <small>Убедитесь, что мониторинг запущен: .\start_all.ps1 status</small>
+                        </p>
+                    `;
+                });
+        }
+        
+        // Load health status on page load
+        window.addEventListener('DOMContentLoaded', loadFastAPIHealth);
+    </script>
 </body>
 </html>

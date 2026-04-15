@@ -30,9 +30,9 @@ function Test-ProcessRunning {
     param($PidFile)
     
     if (Test-Path $PidFile) {
-        $pid = Get-Content $PidFile
+        $processId = Get-Content $PidFile
         try {
-            $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+            $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
             return ($null -ne $process)
         } catch {
             return $false
@@ -48,17 +48,17 @@ function Stop-Service {
     $pidFile = Join-Path $PidDir "$ServiceName.pid"
     
     if (Test-ProcessRunning $pidFile) {
-        $pid = Get-Content $pidFile
-        Write-Host "Stopping $ServiceName (PID: $pid)..." -ForegroundColor Yellow
+        $processId = Get-Content $pidFile
+        Write-Host "Stopping $ServiceName (PID: $processId)..." -ForegroundColor Yellow
         
         try {
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 2
             
             # Force kill if still running
             if (Test-ProcessRunning $pidFile) {
                 Write-Host "Force killing $ServiceName..." -ForegroundColor Red
-                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
             }
             
             Remove-Item $pidFile -ErrorAction SilentlyContinue
@@ -115,11 +115,11 @@ function Test-ServiceStatus {
     $pidFile = Join-Path $PidDir "$ServiceName.pid"
     
     if (Test-ProcessRunning $pidFile) {
-        $pid = Get-Content $pidFile
+        $processId = Get-Content $pidFile
         if ($Port -ne "N/A") {
-            Write-Host "  [OK] $ServiceName (PID: $pid, Port: $Port)" -ForegroundColor Green
+            Write-Host "  [OK] $ServiceName (PID: $processId, Port: $Port)" -ForegroundColor Green
         } else {
-            Write-Host "  [OK] $ServiceName (PID: $pid)" -ForegroundColor Green
+            Write-Host "  [OK] $ServiceName (PID: $processId)" -ForegroundColor Green
         }
         return $true
     } else {

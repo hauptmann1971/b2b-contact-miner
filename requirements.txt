@@ -16,6 +16,7 @@ playwright>=1.40.0
 
 # SERP APIs
 serpapi==0.1.5
+duckduckgo-search>=8.1.1
 
 # Text Processing
 beautifulsoup4>=4.12.2
@@ -31,12 +32,14 @@ openai>=1.6.1
 
 # Task Queue
 redis>=5.0.1
+schedule>=1.2.2
 
 # Utilities
 tenacity>=8.2.3
 fake-useragent>=1.4.0
 email-validator>=2.1.0
 dnspython>=2.4.2
+psutil>=7.2.2
 
 # Monitoring & API
 fastapi>=0.109.0

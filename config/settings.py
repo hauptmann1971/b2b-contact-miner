@@ -4,8 +4,8 @@ import os
 
 
 class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/contact_miner"
+    # Database (MySQL by default, PostgreSQL also supported)
+    DATABASE_URL: str = "mysql+pymysql://user:password@localhost:3306/contact_miner"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -83,8 +83,13 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_DOMAINS: int = 20
     BATCH_SIZE: int = 50
     
+    # Pipeline Settings
+    SEARCH_RESULTS_PER_KEYWORD: int = 5  # Количество сайтов для обработки на одно ключевое слово
+    MAX_KEYWORDS_PER_RUN: int = 50  # Максимальное количество ключевых слов за один запуск
+    
     # Logging
     LOG_FORMAT: str = "text"  # "text" or "json"
+    LOG_LEVEL: str = "INFO"  # "DEBUG", "INFO", "WARNING", "ERROR"
     
     class Config:
         env_file = ".env"

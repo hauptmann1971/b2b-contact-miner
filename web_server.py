@@ -3,6 +3,7 @@ from sqlalchemy import func, desc, text
 from datetime import datetime
 import sys
 import os
+import secrets
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -10,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from models.database import SessionLocal, Keyword, SearchResult, DomainContact, Contact, CrawlLog, PipelineState, init_db
 
 app = Flask(__name__)
-app.secret_key = 'b2b-contact-miner-secret-key'
+app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
 
 
 def get_db():
@@ -63,9 +64,27 @@ def add_keyword():
     language = request.form.get('language', 'ru')
     country = request.form.get('country', 'RU')
     
+    # Валидация входных данных
     if not keyword_text:
         flash('Ключевое слово не может быть пустым', 'error')
         return redirect(url_for('index'))
+    
+    if len(keyword_text) > 500:
+        flash('Ключевое слово слишком длинное (максимум 500 символов)', 'error')
+        return redirect(url_for('index'))
+    
+    # Санитизация - удаляем потенциально опасные символы
+    keyword_text = keyword_text.replace('<', '').replace('>', '').replace('"', '').replace("'", '')
+    
+    # Валидация языка и страны
+    valid_languages = ['ru', 'en', 'kk', 'uz', 'ky', 'tg', 'az', 'hy', 'ka', 'be', 'ro']
+    valid_countries = ['RU', 'KZ', 'UZ', 'KG', 'TJ', 'TM', 'AZ', 'AM', 'GE', 'BY', 'MD', 'UA', 'MN', 'AF', 'PK', 'US', 'GB', 'DE', 'FR']
+    
+    if language not in valid_languages:
+        language = 'ru'  # Значение по умолчанию
+    
+    if country not in valid_countries:
+        country = 'RU'  # Значение по умолчанию
     
     db = SessionLocal()
     try:

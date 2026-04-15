@@ -209,7 +209,17 @@ class ExtractionService:
                 content = response.choices[0].message.content
             
             import json
-            extracted = json.loads(content)
+            try:
+                extracted = json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON from LLM: {e}")
+                logger.debug(f"LLM response: {content[:500]}")
+                return ContactInfo()
+            
+            # Валидация структуры ответа
+            if not isinstance(extracted, dict):
+                logger.error(f"LLM returned non-dict response: {type(extracted)}")
+                return ContactInfo()
             
             return ContactInfo(
                 emails=extracted.get("emails", []),

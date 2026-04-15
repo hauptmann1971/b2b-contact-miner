@@ -255,14 +255,41 @@ def health_check():
         health_status['services']['database'] = 'unhealthy'
         health_status['status'] = 'unhealthy'
     
-    # Проверка Redis (если настроен)
+    # Проверка Redis (опционально)
     try:
         import redis
         r = redis.Redis(host='localhost', port=6379, db=0, socket_timeout=2)
         r.ping()
         health_status['services']['redis'] = 'healthy'
     except Exception:
-        health_status['services']['redis'] = 'unhealthy'
+        health_status['services']['redis'] = 'not_configured'  # Не влияет на общий статус
+    
+    # Проверка очереди задач (опционально)
+    try:
+        # Проверяем, запущен ли планировщик через PID файл
+        import os
+        import psutil
+        scheduler_pid_file = 'pids/scheduler.pid'
+        if os.path.exists(scheduler_pid_file):
+            with open(scheduler_pid_file, 'r') as f:
+                pid = int(f.read().strip())
+                # Проверяем, существует ли процесс используя psutil
+                if psutil.pid_exists(pid):
+                    health_status['services']['task_queue'] = 'healthy'
+                else:
+                    health_status['services']['task_queue'] = 'not_running'
+        else:
+            health_status['services']['task_queue'] = 'not_configured'
+    except ImportError:
+        # Если psutil не установлен, просто проверяем существование PID файла
+        import os
+        scheduler_pid_file = 'pids/scheduler.pid'
+        if os.path.exists(scheduler_pid_file):
+            health_status['services']['task_queue'] = 'healthy (PID file exists)'
+        else:
+            health_status['services']['task_queue'] = 'not_configured'
+    except Exception:
+        health_status['services']['task_queue'] = 'not_running'
     
     return jsonify(health_status), 200 if health_status['status'] == 'healthy' else 503
 

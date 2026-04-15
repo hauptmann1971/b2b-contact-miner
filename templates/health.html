@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Health Check - B2B Contact Miner</title>
     <style>
         * {
@@ -177,13 +180,22 @@
             cursor: pointer;
             font-size: 1em;
             font-weight: 500;
-            transition: transform 0.2s;
+            transition: all 0.2s;
             margin-top: 20px;
         }
         
         .refresh-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .refresh-btn:active {
+            transform: translateY(0);
+        }
+        
+        .refresh-btn.loading {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         
         .auto-refresh {
@@ -226,7 +238,7 @@
             <div id="full-health">
                 <p style="color: #666;">Загрузка данных...</p>
             </div>
-            <button class="refresh-btn" onclick="loadFullHealth()">🔄 Обновить</button>
+            <button class="refresh-btn" id="btn-full-health" onclick="loadFullHealth()">🔄 Обновить</button>
             <div class="auto-refresh">
                 <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()">
                 <label for="auto-refresh">Автообновление каждые 10 секунд</label>
@@ -238,7 +250,7 @@
             <div id="liveness">
                 <p style="color: #666;">Загрузка данных...</p>
             </div>
-            <button class="refresh-btn" onclick="loadLiveness()">🔄 Обновить</button>
+            <button class="refresh-btn" id="btn-liveness" onclick="loadLiveness()">🔄 Обновить</button>
         </div>
         
         <div class="health-section">
@@ -246,7 +258,7 @@
             <div id="readiness">
                 <p style="color: #666;">Загрузка данных...</p>
             </div>
-            <button class="refresh-btn" onclick="loadReadiness()">🔄 Обновить</button>
+            <button class="refresh-btn" id="btn-readiness" onclick="loadReadiness()">🔄 Обновить</button>
         </div>
         
         <div class="health-section">
@@ -284,15 +296,33 @@
                 return '<span class="service-status badge-success">✓ ' + status + '</span>';
             } else if (status === 'unhealthy' || status === 'not_ready') {
                 return '<span class="service-status badge-danger">✗ ' + status + '</span>';
+            } else if (status === 'not_configured') {
+                return '<span class="service-status badge-warning">⚙ не настроено</span>';
+            } else if (status === 'not_running') {
+                return '<span class="service-status badge-warning">⏸ не запущено</span>';
             } else {
                 return '<span class="service-status badge-warning">⏳ ' + status + '</span>';
             }
         }
         
         function loadFullHealth() {
-            fetch('/health')
-                .then(response => response.json())
+            console.log('Loading full health check...');
+            const btn = document.getElementById('btn-full-health');
+            if (btn) {
+                btn.classList.add('loading');
+                btn.textContent = '⏳ Загрузка...';
+            }
+            
+            fetch('/health', { cache: 'no-cache' })
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error('HTTP error! status: ' + response.status);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Health data received:', data);
                     const overallStatus = document.getElementById('overall-status');
                     if (data.status === 'healthy') {
                         overallStatus.className = 'overall-status overall-healthy';
@@ -316,29 +346,42 @@
                     }
                     
                     document.getElementById('full-health').innerHTML = html;
+                    console.log('Full health updated successfully');
                 })
                 .catch(error => {
+                    console.error('Error loading health:', error);
                     document.getElementById('full-health').innerHTML = '<p style="color: #dc3545;">Ошибка загрузки: ' + error.message + '</p>';
+                })
+                .finally(() => {
+                    if (btn) {
+                        btn.classList.remove('loading');
+                        btn.textContent = '🔄 Обновить';
+                    }
                 });
         }
         
         function loadLiveness() {
-            fetch('/health/live')
+            console.log('Loading liveness check...');
+            fetch('/health/live', { cache: 'no-cache' })
                 .then(response => response.json())
                 .then(data => {
+                    console.log('Liveness data:', data);
                     let html = '<div class="timestamp">Время: ' + formatTimestamp(data.timestamp) + '</div>';
                     html += '<div class="service-card"><div class="service-header"><span class="service-name">Статус приложения</span>' + getStatusBadge(data.status) + '</div></div>';
                     document.getElementById('liveness').innerHTML = html;
                 })
                 .catch(error => {
+                    console.error('Error loading liveness:', error);
                     document.getElementById('liveness').innerHTML = '<p style="color: #dc3545;">Ошибка загрузки: ' + error.message + '</p>';
                 });
         }
         
         function loadReadiness() {
-            fetch('/health/ready')
+            console.log('Loading readiness check...');
+            fetch('/health/ready', { cache: 'no-cache' })
                 .then(response => response.json())
                 .then(data => {
+                    console.log('Readiness data:', data);
                     let html = '<div class="timestamp">Время: ' + formatTimestamp(data.timestamp) + '</div>';
                     html += '<div class="service-card"><div class="service-header"><span class="service-name">Готовность к работе</span>' + getStatusBadge(data.status) + '</div></div>';
                     if (data.error) {
@@ -347,6 +390,7 @@
                     document.getElementById('readiness').innerHTML = html;
                 })
                 .catch(error => {
+                    console.error('Error loading readiness:', error);
                     document.getElementById('readiness').innerHTML = '<p style="color: #dc3545;">Ошибка загрузки: ' + error.message + '</p>';
                 });
         }

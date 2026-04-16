@@ -56,6 +56,7 @@ class SearchResult(Base):
     snippet = Column(Text)
     position = Column(Integer)
     is_processed = Column(Boolean, default=False)
+    raw_search_query = Column(Text)  # Raw query sent to SERP provider
     created_at = Column(DateTime, default=datetime.utcnow)
     
     keyword = relationship("Keyword", back_populates="searches")
@@ -74,6 +75,7 @@ class DomainContact(Base):
     domain = Column(String(500), nullable=False, index=True)
     tags = Column(JSON, default=list)
     site_metadata = Column("metadata", JSON, default=dict)  # Rename to avoid SQLAlchemy reserved word
+    contacts_json = Column(JSON, default=dict)  # Hybrid: JSON for fast read {emails, telegram, linkedin, phones}
     extraction_method = Column(String(50))
     confidence_score = Column(Integer, default=0)
     is_verified = Column(Boolean, default=False)
@@ -119,6 +121,9 @@ class CrawlLog(Base):
     error_message = Column(Text)
     pages_crawled = Column(Integer, default=0)
     duration_seconds = Column(Integer)
+    llm_request = Column(Text)  # Raw request sent to LLM
+    llm_response = Column(Text)  # Raw response from LLM
+    llm_model = Column(String(100))  # LLM model used (e.g., "yandexgpt", "gigachat")
     crawled_at = Column(DateTime, default=datetime.utcnow)
 
 

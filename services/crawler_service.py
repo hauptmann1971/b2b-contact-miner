@@ -40,15 +40,12 @@ class CrawlerService:
         self.processed_domains = set()
         self.rate_limiter = DomainRateLimiter(settings.MAX_CONCURRENT_DOMAINS_PER_SITE)
     
-    async def crawl_domain(self, base_url: str, redis_client=None) -> Dict:
+    async def crawl_domain(self, base_url: str) -> Dict:
         """Crawl a domain with prioritized link extraction and deduplication"""
         domain = urlparse(base_url).netloc
         
-        if redis_client:
-            is_processed = await redis_client.get(f"domain:{domain}")
-            if is_processed:
-                logger.info(f"Domain already processed (Redis cache): {domain}")
-                return {"domain": domain, "pages_crawled": 0, "content": [], "duration": 0, "skipped": True}
+        # Note: Redis deduplication removed - using database-backed task queue instead
+        # Domain deduplication is now handled by the task queue status tracking
         
         logger.info(f"Starting crawl for domain: {domain}")
         start_time = time.time()
@@ -78,6 +75,12 @@ class CrawlerService:
                     pages_to_crawl = self._build_prioritized_queue(base_url, sitemap_urls if sitemap_urls else [])
                     
                     while pages_to_crawl and pages_crawled < self.max_pages:
+                        # Check domain crawl timeout
+                        elapsed_time = time.time() - start_time
+                        if elapsed_time > settings.DOMAIN_CRAWL_TIMEOUT:
+                            logger.warning(f"Domain crawl timeout for {domain} after {elapsed_time:.0f}s ({pages_crawled} pages)")
+                            break
+                        
                         prioritized_link = pages_to_crawl.pop(0)
                         
                         if pages_crawled >= self.max_pages:
@@ -120,8 +123,7 @@ class CrawlerService:
         
         duration = time.time() - start_time
         
-        if redis_client:
-            await redis_client.setex(f"domain:{domain}", 30 * 24 * 3600, "1")
+        # Note: Redis caching removed - using database-backed task queue for tracking
         
         logger.info(f"Completed crawl for {domain}: {pages_crawled} pages in {duration:.2f}s")
         

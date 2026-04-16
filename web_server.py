@@ -238,78 +238,54 @@ def delete_keyword(keyword_id):
 # Health Check Endpoints
 @app.route('/health')
 def health_check():
-    """Полная проверка здоровья системы"""
-    health_status = {
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'services': {}
-    }
-    
-    # Проверка базы данных
+    """Полная проверка здоровья системы - проксирует к FastAPI monitoring"""
+    import requests
     try:
-        db = SessionLocal()
-        db.execute(text('SELECT 1'))
-        db.close()
-        health_status['services']['database'] = 'healthy'
+        # Проксируем запрос к FastAPI monitoring сервису
+        response = requests.get('http://localhost:8000/health', timeout=5)
+        return response.json(), response.status_code
     except Exception as e:
-        health_status['services']['database'] = 'unhealthy'
-        health_status['status'] = 'unhealthy'
-    
-    # Проверка Redis (опционально)
-    try:
-        import redis
-        r = redis.Redis(host='localhost', port=6379, db=0, socket_timeout=2)
-        r.ping()
-        health_status['services']['redis'] = 'healthy'
-    except Exception:
-        health_status['services']['redis'] = 'not_configured'  # Не влияет на общий статус
-    
-    # Проверка очереди задач (опционально)
-    try:
-        # Проверяем, запущен ли планировщик через PID файл
-        import os
-        import psutil
-        scheduler_pid_file = 'pids/scheduler.pid'
-        if os.path.exists(scheduler_pid_file):
-            with open(scheduler_pid_file, 'r') as f:
-                pid = int(f.read().strip())
-                # Проверяем, существует ли процесс используя psutil
-                if psutil.pid_exists(pid):
-                    health_status['services']['task_queue'] = 'healthy'
-                else:
-                    health_status['services']['task_queue'] = 'not_running'
-        else:
-            health_status['services']['task_queue'] = 'not_configured'
-    except ImportError:
-        # Если psutil не установлен, просто проверяем существование PID файла
-        import os
-        scheduler_pid_file = 'pids/scheduler.pid'
-        if os.path.exists(scheduler_pid_file):
-            health_status['services']['task_queue'] = 'healthy (PID file exists)'
-        else:
-            health_status['services']['task_queue'] = 'not_configured'
-    except Exception:
-        health_status['services']['task_queue'] = 'not_running'
-    
-    return jsonify(health_status), 200 if health_status['status'] == 'healthy' else 503
+        # Fallback если monitoring недоступен
+        return {
+            'status': 'unhealthy',
+            'timestamp': datetime.utcnow().isoformat(),
+            'services': {
+                'database': 'unknown',
+                'task_queue': 'unknown',
+                'monitoring_error': str(e)
+            },
+            'error': f'Monitoring service unavailable: {str(e)}'
+        }, 503
 
 
 @app.route('/health/live')
 def liveness_check():
-    """Проверка живости приложения"""
-    return jsonify({'status': 'alive', 'timestamp': datetime.utcnow().isoformat()}), 200
+    """Проверка живости приложения - проксирует к FastAPI monitoring"""
+    import requests
+    try:
+        response = requests.get('http://localhost:8000/health/live', timeout=5)
+        return response.json(), response.status_code
+    except Exception as e:
+        return {
+            'status': 'unhealthy',
+            'timestamp': datetime.utcnow().isoformat(),
+            'error': f'Monitoring service unavailable: {str(e)}'
+        }, 503
 
 
 @app.route('/health/ready')
 def readiness_check():
-    """Проверка готовности приложения"""
+    """Проверка готовности приложения - проксирует к FastAPI monitoring"""
+    import requests
     try:
-        db = SessionLocal()
-        db.execute(text('SELECT 1'))
-        db.close()
-        return jsonify({'status': 'ready', 'timestamp': datetime.utcnow().isoformat()}), 200
+        response = requests.get('http://localhost:8000/health/ready', timeout=5)
+        return response.json(), response.status_code
     except Exception as e:
-        return jsonify({'status': 'not_ready', 'error': str(e)}), 503
+        return {
+            'status': 'not_ready',
+            'timestamp': datetime.utcnow().isoformat(),
+            'error': f'Monitoring service unavailable: {str(e)}'
+        }, 503
 
 
 @app.route('/api/stats')

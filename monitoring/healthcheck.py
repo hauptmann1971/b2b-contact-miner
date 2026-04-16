@@ -6,10 +6,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any
-import redis.asyncio as redis
 from sqlalchemy import text
 from models.database import SessionLocal, engine
-from workers.task_worker import AsyncTaskQueue
+from workers.db_task_queue import DatabaseTaskQueue
 from config.settings import settings
 from datetime import datetime
 from loguru import logger
@@ -20,31 +19,14 @@ app = FastAPI(title="Contact Miner Health Check", version="1.0.0")
 # Enable CORS for Flask web server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "http://localhost:5000", "http://127.0.0.1:5000"],  # Allows all origins
+    allow_origins=["*", "http://localhost:5000", "http://127.0.0.1:5000"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
-# Global references (set by main.py when running pipeline)
-redis_client: redis.Redis = None
-task_queue: AsyncTaskQueue = None
-
-
-@lru_cache()
-def get_redis_client() -> redis.Redis:
-    """Lazy initialization of Redis client for standalone API usage"""
-    try:
-        return redis.from_url(settings.REDIS_URL, decode_responses=True)
-    except Exception as e:
-        logger.warning(f"Redis connection failed: {e}, using FakeRedis")
-        # Fallback to FakeRedis for development
-        try:
-            import fakeredis
-            return fakeredis.FakeAsyncRedis()
-        except ImportError:
-            logger.error("fakeredis not installed")
-            return None
+# Global reference to task queue (set by main.py when running pipeline)
+task_queue: DatabaseTaskQueue = None
 
 
 @app.on_event("startup")
@@ -68,58 +50,17 @@ async def health_check():
     
     services_status = {}
     
-    # Use global redis_client if set, otherwise lazy initialize
-    active_redis = redis_client or get_redis_client()
-    
+    # Check database with latency measurement
     try:
-        if active_redis:
-            await active_redis.ping()
-            services_status["redis"] = {
-                "status": "healthy",
-                "latency_ms": _measure_async_latency(active_redis.ping)
-            }
-        else:
-            # Try to use FakeRedis as fallback
-            try:
-                import fakeredis.aioredis
-                fake_redis = fakeredis.aioredis.FakeRedis()
-                await fake_redis.ping()
-                services_status["redis"] = {
-                    "status": "healthy (FakeRedis)",
-                    "latency_ms": 0.1,
-                    "note": "Using in-memory Redis for development"
-                }
-                active_redis = fake_redis
-            except Exception as fake_error:
-                services_status["redis"] = {
-                    "status": "not_configured",
-                    "error": f"Redis unavailable and FakeRedis failed: {str(fake_error)}"
-                }
-    except Exception as e:
-        # Real Redis failed, try FakeRedis
-        try:
-            import fakeredis.aioredis
-            fake_redis = fakeredis.aioredis.FakeRedis()
-            await fake_redis.ping()
-            services_status["redis"] = {
-                "status": "healthy (FakeRedis)",
-                "latency_ms": 0.1,
-                "note": "Using in-memory Redis for development"
-            }
-            active_redis = fake_redis
-        except Exception as fake_error:
-            services_status["redis"] = {
-                "status": "unhealthy",
-                "error": f"{str(e)}. FakeRedis also failed: {str(fake_error)}"
-            }
-    
-    try:
+        db_start = datetime.utcnow()
         db = SessionLocal()
         db.execute(text("SELECT 1"))
         db.close()
+        db_latency = round((datetime.utcnow() - db_start).total_seconds() * 1000, 2)
+        
         services_status["database"] = {
             "status": "healthy",
-            "latency_ms": _measure_db_latency()
+            "latency_ms": db_latency
         }
     except Exception as e:
         services_status["database"] = {
@@ -127,36 +68,79 @@ async def health_check():
             "error": str(e)
         }
     
+    # Check task queue (now uses database) - optimized to avoid extra DB calls when not needed
     try:
         if task_queue:
-            queue_size = task_queue.queue.qsize()
+            # Only get stats if queue is initialized (fast operation)
+            stats = await task_queue.get_queue_stats()
             services_status["task_queue"] = {
                 "status": "healthy",
-                "queue_size": queue_size,
-                "max_size": task_queue.queue.maxsize,
-                "workers_active": len(task_queue.workers)
+                "type": "database",
+                "pending_tasks": stats.get('pending', 0),
+                "running_tasks": stats.get('running', 0),
+                "completed_tasks": stats.get('completed', 0),
+                "failed_tasks": stats.get('failed', 0),
+                "total_tasks": stats.get('total', 0),
+                "active_workers": stats.get('current_workers', 0)
             }
         else:
-            services_status["task_queue"] = {"status": "not_initialized"}
+            # Read stats directly from database when queue object not available
+            db = SessionLocal()
+            result = db.execute(text("SHOW TABLES LIKE 'task_queue'")).fetchone()
+            
+            if result:
+                # Table exists - read stats from database
+                pending = db.execute(text("SELECT COUNT(*) FROM task_queue WHERE status = 'pending'")).scalar()
+                running = db.execute(text("SELECT COUNT(*) FROM task_queue WHERE status = 'running'")).scalar()
+                completed = db.execute(text("SELECT COUNT(*) FROM task_queue WHERE status = 'completed'")).scalar()
+                failed = db.execute(text("SELECT COUNT(*) FROM task_queue WHERE status = 'failed'")).scalar()
+                total = db.execute(text("SELECT COUNT(*) FROM task_queue")).scalar()
+                db.close()
+                
+                if total > 0 or pending > 0 or running > 0:
+                    services_status["task_queue"] = {
+                        "status": "healthy",
+                        "type": "database",
+                        "pending_tasks": pending,
+                        "running_tasks": running,
+                        "completed_tasks": completed,
+                        "failed_tasks": failed,
+                        "total_tasks": total,
+                        "active_workers": 0,
+                        "note": "Reading from database (queue workers not in this process)"
+                    }
+                else:
+                    services_status["task_queue"] = {
+                        "status": "available",
+                        "type": "database",
+                        "note": "Table exists but no tasks yet"
+                    }
+            else:
+                db.close()
+                services_status["task_queue"] = {
+                    "status": "not_configured",
+                    "note": "Run migration: migrations/add_task_queue_table.sql"
+                }
     except Exception as e:
         services_status["task_queue"] = {
             "status": "unhealthy",
             "error": str(e)
         }
     
-    unhealthy_services = [
-        name for name, status in services_status.items()
-        if status.get("status") == "unhealthy"
-    ]
+    # Determine overall status
+    all_healthy = all(
+        s.get("status") in ["healthy", "available"] 
+        for s in services_status.values()
+    )
     
-    overall_status = "unhealthy" if unhealthy_services else "healthy"
+    total_time = round((datetime.utcnow() - start_time).total_seconds() * 1000, 2)
     
     return HealthResponse(
-        status=overall_status,
+        status="healthy" if all_healthy else "unhealthy",
         timestamp=datetime.utcnow().isoformat(),
         services=services_status,
-        queue_size=task_queue.queue.qsize() if task_queue else 0,
-        uptime_seconds=(datetime.utcnow() - start_time).total_seconds()
+        queue_size=services_status.get("task_queue", {}).get("pending_tasks", 0),
+        uptime_seconds=total_time
     )
 
 
@@ -164,15 +148,11 @@ async def health_check():
 async def readiness_check():
     """Kubernetes readiness probe"""
     try:
-        active_redis = redis_client or get_redis_client()
-        if active_redis:
-            await active_redis.ping()
-        
         db = SessionLocal()
         db.execute(text("SELECT 1"))
         db.close()
         
-        return {"status": "ready"}
+        return {"status": "ready", "timestamp": datetime.utcnow().isoformat()}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Not ready: {str(e)}")
 
@@ -180,7 +160,7 @@ async def readiness_check():
 @app.get("/health/live")
 async def liveness_check():
     """Kubernetes liveness probe"""
-    return {"status": "alive"}
+    return {"status": "alive", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.get("/metrics/pipeline")

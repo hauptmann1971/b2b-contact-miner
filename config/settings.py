@@ -34,14 +34,15 @@ class Settings(BaseSettings):
     USE_LLM_EXTRACTION: bool = True
     
     # Crawler Settings
-    MAX_PAGES_PER_DOMAIN: int = 10
-    REQUEST_TIMEOUT: int = 30
-    CONCURRENT_BROWSERS: int = 5
+    MAX_PAGES_PER_DOMAIN: int = 3  # Reduced for speed
+    REQUEST_TIMEOUT: int = 15  # Reduced from 30s for faster crawling
+    DOMAIN_CRAWL_TIMEOUT: int = 45  # Max seconds to crawl entire domain (prevents hanging)
+    CONCURRENT_BROWSERS: int = 3  # Reduced from 5
     HEADLESS_BROWSER: bool = True
-    MAX_CONCURRENT_DOMAINS_PER_SITE: int = 5
+    MAX_CONCURRENT_DOMAINS_PER_SITE: int = 3  # Reduced from 5
     
     # Rate Limiting
-    DELAY_BETWEEN_REQUESTS: float = 1.0
+    DELAY_BETWEEN_REQUESTS: float = 0.5  # Reduced for speed
     MAX_RETRIES: int = 3
     
     # Target Countries & Languages
@@ -84,7 +85,7 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = 50
     
     # Pipeline Settings
-    SEARCH_RESULTS_PER_KEYWORD: int = 5  # Количество сайтов для обработки на одно ключевое слово
+    SEARCH_RESULTS_PER_KEYWORD: int = 2  # Reduced for speed (was 5)
     MAX_KEYWORDS_PER_RUN: int = 50  # Максимальное количество ключевых слов за один запуск
     
     # Logging

@@ -1,5 +1,4 @@
 import asyncio
-import redis.asyncio as redis
 from sqlalchemy.orm import Session
 from models.database import SessionLocal, init_db, CrawlLog, Contact, DomainContact, ContactType, SearchResult
 from services.keyword_service import KeywordService
@@ -8,7 +7,7 @@ from services.crawler_service import CrawlerService
 from services.extraction_service import ExtractionService
 from utils.state_manager import StateManager
 from utils.robots_checker import RobotsChecker
-from workers.task_worker import AsyncTaskQueue
+from workers.db_task_queue import DatabaseTaskQueue
 from config.settings import settings
 from loguru import logger
 from datetime import datetime
@@ -42,31 +41,19 @@ class ContactMiningPipeline:
         self.extractor = ExtractionService()
         self.state_manager = StateManager()
         self.robots_checker = RobotsChecker()
-        self.redis_client = None
         self.task_queue = None
     
     async def initialize(self):
         """Initialize async components"""
-        try:
-            self.redis_client = redis.from_url(
-                settings.REDIS_URL,
-                decode_responses=True
-            )
-            await self.redis_client.ping()
-            logger.info("Connected to Redis")
-        except Exception as e:
-            logger.warning(f"Redis not available, falling back to in-memory deduplication: {e}")
-            self.redis_client = None
-        
-        self.task_queue = AsyncTaskQueue(max_concurrent=settings.MAX_CONCURRENT_DOMAINS)
+        # Initialize database-backed task queue
+        self.task_queue = DatabaseTaskQueue(max_concurrent=settings.MAX_CONCURRENT_DOMAINS)
         await self.task_queue.start_workers()
         
         try:
-            from monitoring.healthcheck import redis_client as health_redis, task_queue as health_queue
+            from monitoring.healthcheck import task_queue as health_queue
             import monitoring.healthcheck as health_module
-            health_module.redis_client = self.redis_client
             health_module.task_queue = self.task_queue
-            logger.info("Healthcheck API initialized")
+            logger.info("Healthcheck API initialized with database task queue")
         except Exception as e:
             logger.warning(f"Failed to initialize healthcheck API: {e}")
     
@@ -74,8 +61,7 @@ class ContactMiningPipeline:
         """Cleanup resources"""
         if self.task_queue:
             await self.task_queue.stop_workers()
-        if self.redis_client:
-            await self.redis_client.close()
+            logger.info("Task queue workers stopped")
     
     async def run_pipeline(self):
         """Main pipeline execution"""
@@ -136,6 +122,12 @@ class ContactMiningPipeline:
                     logger.error(f"\n❌ Unexpected error processing keyword {keyword.id}: {e}")
                     logger.debug(traceback.format_exc())
                     
+                    # Rollback DB session to prevent PendingRollbackError
+                    try:
+                        keyword_db.rollback()
+                    except:
+                        pass
+                    
                     # Mark as failed but continue with next keyword
                     try:
                         self.state_manager.mark_failed(keyword.id, str(e))
@@ -146,6 +138,11 @@ class ContactMiningPipeline:
                     logger.info("Continuing with next keyword...")
                     continue
                 finally:
+                    # Rollback any pending transactions and close session
+                    try:
+                        keyword_db.rollback()
+                    except:
+                        pass
                     # Закрываем сессию для текущего ключевого слова
                     keyword_db.close()
             
@@ -172,7 +169,8 @@ class ContactMiningPipeline:
                 return {"websites": 0, "contacts": 0}
             
             # Save search results with retry
-            await self._retry_save_results(db, keyword.id, search_results)
+            raw_query = f"{keyword.keyword} site:{keyword.country}" if keyword.country else keyword.keyword
+            await self._retry_save_results(db, keyword.id, search_results, raw_query)
             
             # Process each search result
             for idx, result in enumerate(search_results[:settings.SEARCH_RESULTS_PER_KEYWORD], 1):
@@ -230,7 +228,7 @@ class ContactMiningPipeline:
                     query=keyword.keyword,
                     country=keyword.country,
                     language=keyword.language,
-                    num_results=10
+                    num_results=2  # Minimal for speed
                 )
                 logger.info(f"✓ Search successful: {len(search_results)} results")
                 return search_results
@@ -244,11 +242,11 @@ class ContactMiningPipeline:
                     logger.error(f"❌ Search failed after {max_retries} attempts")
                     return []
     
-    async def _retry_save_results(self, db, keyword_id, search_results, max_retries=3):
+    async def _retry_save_results(self, db, keyword_id, search_results, raw_query=None, max_retries=3):
         """Save search results with retry logic"""
         for attempt in range(1, max_retries + 1):
             try:
-                self.serp.save_results(db, keyword_id, search_results)
+                self.serp.save_results(db, keyword_id, search_results, raw_query)
                 logger.info(f"✓ Saved {len(search_results)} search results")
                 return
             except Exception as e:
@@ -276,12 +274,12 @@ class ContactMiningPipeline:
         start_time = time.time()
         
         try:
-            crawl_data = await self.crawler.crawl_domain(url, self.redis_client)
+            crawl_data = await self.crawler.crawl_domain(url)
             
             if crawl_data.get("skipped"):
                 return None
             
-            contacts = self.extractor.extract_contacts(crawl_data["content"])
+            contacts, llm_data = self.extractor.extract_contacts(crawl_data["content"])
             
             if contacts.emails:
                 mx_results = await self.extractor.batch_verify_emails(contacts.emails)
@@ -294,16 +292,26 @@ class ContactMiningPipeline:
                 sr = db.query(SearchResult).filter(SearchResult.url == url).first()
                 
                 if sr:
+                    # Prepare contacts_json for hybrid approach
+                    contacts_data = {
+                        "emails": contacts.emails,
+                        "telegram": contacts.telegram_links,
+                        "linkedin": contacts.linkedin_links,
+                        "phones": contacts.phone_numbers if hasattr(contacts, 'phone_numbers') else []
+                    }
+                    
                     domain_contact = DomainContact(
                         search_result_id=sr.id,
                         domain=domain,
                         tags=[],
+                        contacts_json=contacts_data,  # Hybrid: JSON for fast read
                         confidence_score=self.extractor.calculate_confidence(contacts),
                         extraction_method="llm" if settings.USE_LLM_EXTRACTION else "regex"
                     )
                     db.add(domain_contact)
                     db.flush()
                     
+                    # Also save to normalized table for search
                     for email in contacts.emails:
                         contact = Contact(
                             domain_contact_id=domain_contact.id,
@@ -341,7 +349,10 @@ class ContactMiningPipeline:
                 url=url,
                 status_code=200,
                 pages_crawled=crawl_data["pages_crawled"],
-                duration_seconds=duration
+                duration_seconds=duration,
+                llm_request=llm_data.get("request") if llm_data else None,
+                llm_response=llm_data.get("response") if llm_data else None,
+                llm_model=llm_data.get("model") if llm_data else None
             )
             db.add(crawl_log)
             db.commit()
@@ -354,6 +365,7 @@ class ContactMiningPipeline:
                 status_code=0,
                 error_message=str(e),
                 duration_seconds=int(time.time() - start_time)
+                # llm_data not available on error
             )
             db.add(crawl_log)
             db.commit()

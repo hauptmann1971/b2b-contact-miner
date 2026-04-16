@@ -100,7 +100,7 @@ class SerpService:
         """Search using BrightData SERP API"""
         raise NotImplementedError("BrightData integration pending")
     
-    def save_results(self, db: Session, keyword_id: int, results: List[Dict]):
+    def save_results(self, db: Session, keyword_id: int, results: List[Dict], raw_query: str = None):
         """Save search results to database"""
         for result in results:
             existing = db.query(SearchResult).filter(
@@ -114,7 +114,8 @@ class SerpService:
                     url=result["url"],
                     title=result.get("title"),
                     snippet=result.get("snippet"),
-                    position=result.get("position")
+                    position=result.get("position"),
+                    raw_search_query=raw_query  # Save raw query sent to SERP provider
                 )
                 db.add(search_result)
         

@@ -20,8 +20,10 @@ class ExtractionService:
             r'{@}', r' {@} ',
         ]
     
-    def extract_contacts(self, content_list: List[Dict]) -> ContactInfo:
-        """Extract contacts with smart LLM fallback"""
+    def extract_contacts(self, content_list: List[Dict]) -> tuple:
+        """Extract contacts with smart LLM fallback
+        Returns: (ContactInfo, llm_data) where llm_data is dict with request/response/model or None
+        """
         emails = set()
         telegram_links = set()
         linkedin_links = set()
@@ -29,6 +31,7 @@ class ExtractionService:
         
         needs_llm_fallback = False
         llm_candidate_pages = []
+        llm_data = None  # Will store {request, response, model} if LLM used
         
         for item in content_list:
             content = item.get("content", "")
@@ -75,7 +78,7 @@ class ExtractionService:
         
         if needs_llm_fallback and settings.USE_LLM_EXTRACTION:
             logger.info(f"Applying LLM fallback for {len(llm_candidate_pages)} pages with obfuscated emails")
-            llm_contacts = self._extract_with_llm_selective(llm_candidate_pages)
+            llm_contacts, llm_data = self._extract_with_llm_selective(llm_candidate_pages)
             
             emails.update(llm_contacts.emails)
             telegram_links.update(llm_contacts.telegram_links)
@@ -90,10 +93,12 @@ class ExtractionService:
             telegram_links=list(telegram_links),
             linkedin_links=list(linkedin_links),
             phone_numbers=list(phone_numbers)
-        )
+        ), llm_data
     
-    def _extract_with_llm_selective(self, obfuscated_contents: List[str]) -> ContactInfo:
-        """Use LLM only for pages with obfuscated emails"""
+    def _extract_with_llm_selective(self, obfuscated_contents: List[str]) -> tuple:
+        """Use LLM only for pages with obfuscated emails
+        Returns: (ContactInfo, llm_data) where llm_data has request/response/model
+        """
         # Determine which LLM to use (priority: YandexGPT > GigaChat > DeepSeek > OpenAI)
         if settings.USE_YANDEXGPT and settings.YANDEX_IAM_TOKEN and settings.YANDEX_FOLDER_ID:
             llm_type = "yandexgpt"
@@ -104,7 +109,7 @@ class ExtractionService:
         elif settings.USE_OPENAI and settings.OPENAI_API_KEY:
             llm_type = "openai"
         else:
-            return ContactInfo()
+            return ContactInfo(), None
         
         try:
             combined_content = "\n\n--- PAGE SEPARATOR ---\n\n".join(obfuscated_contents)
@@ -158,10 +163,22 @@ class ExtractionService:
                     ]
                 }
                 
+                # Store request data
+                llm_request_data = {
+                    "prompt": prompt[:2000],  # Truncate for storage
+                    "payload": str(payload)[:2000]
+                }
+                
                 response = requests.post(url, headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()
                 content = result["result"]["alternatives"][0]["message"]["text"]
+                
+                # Store response data
+                llm_response_data = {
+                    "response": content,
+                    "full_result": str(result)[:2000]
+                }
                 
             elif llm_type == "gigachat":
                 from gigachat import GigaChat
@@ -173,6 +190,12 @@ class ExtractionService:
                     scope="GIGACHAT_API_PERS"
                 )
                 
+                # Store request data
+                llm_request_data = {
+                    "prompt": prompt[:2000],
+                    "model": "gigachat"
+                }
+                
                 response = gc.chat(
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
@@ -181,12 +204,23 @@ class ExtractionService:
                 
                 content = response.choices[0].message.content
                 
+                # Store response data
+                llm_response_data = {
+                    "response": content
+                }
+                
             elif llm_type == "deepseek":
                 from openai import OpenAI
                 client = OpenAI(
                     api_key=settings.DEEPSEEK_API_KEY,
                     base_url="https://api.deepseek.com/v1"
                 )
+                
+                # Store request data
+                llm_request_data = {
+                    "prompt": prompt[:2000],
+                    "model": "deepseek-chat"
+                }
                 
                 response = client.chat.completions.create(
                     model="deepseek-chat",
@@ -196,9 +230,20 @@ class ExtractionService:
                 )
                 content = response.choices[0].message.content
                 
+                # Store response data
+                llm_response_data = {
+                    "response": content
+                }
+                
             else:  # openai
                 from openai import OpenAI
                 client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                
+                # Store request data
+                llm_request_data = {
+                    "prompt": prompt[:2000],
+                    "model": "gpt-3.5-turbo"
+                }
                 
                 response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
@@ -207,6 +252,11 @@ class ExtractionService:
                     max_tokens=300
                 )
                 content = response.choices[0].message.content
+                
+                # Store response data
+                llm_response_data = {
+                    "response": content
+                }
             
             import json
             try:
@@ -214,22 +264,29 @@ class ExtractionService:
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON from LLM: {e}")
                 logger.debug(f"LLM response: {content[:500]}")
-                return ContactInfo()
+                return ContactInfo(), None
             
             # Валидация структуры ответа
             if not isinstance(extracted, dict):
                 logger.error(f"LLM returned non-dict response: {type(extracted)}")
-                return ContactInfo()
+                return ContactInfo(), None
+            
+            # Prepare LLM data for storage
+            llm_data = {
+                "request": str(llm_request_data),
+                "response": str(llm_response_data),
+                "model": llm_type
+            }
             
             return ContactInfo(
                 emails=extracted.get("emails", []),
                 telegram_links=extracted.get("telegram", []),
                 linkedin_links=extracted.get("linkedin", []),
                 phone_numbers=[]
-            )
+            ), llm_data
         except Exception as e:
             logger.error(f"LLM extraction failed: {e}")
-            return ContactInfo()
+            return ContactInfo(), None
     
     def verify_mx_domain(self, email: str) -> bool:
         """Check if email domain has MX records (DNS verification)"""

@@ -57,6 +57,7 @@ class SearchResult(Base):
     position = Column(Integer)
     is_processed = Column(Boolean, default=False)
     raw_search_query = Column(Text)  # Raw query sent to SERP provider
+    raw_search_response = Column(JSON)  # Raw JSON response from SERP provider
     created_at = Column(DateTime, default=datetime.utcnow)
     
     keyword = relationship("Keyword", back_populates="searches")

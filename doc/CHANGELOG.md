@@ -1,68 +1,143 @@
-# Changelog - B2B Contact Miner
+# 📝 Changelog - История изменений
 
-## [1.1.0] - 2026-04-06
+## [1.1.0] - 2026-04-15
 
-### Added
-- ✅ **Unit Tests** - Полное покрытие тестами extraction_service и robots_checker
-  - `tests/test_extraction_service.py` - 13 тестов для извлечения контактов
-  - `tests/test_robots_checker.py` - 9 тестов для robots.txt парсера
-  - `tests/conftest.py` - pytest fixtures
-  - `run_tests.py` - Удобный скрипт запуска тестов
-  
-- ✅ **Crawl-Delay Support** - Поддержка Crawl-delay из robots.txt
-  - Автоматическое распознавание директивы Crawl-delay
-  - Динамическая задержка между запросами per domain
-  - Метод `get_crawl_delay()` в RobotsChecker
+### 🔒 Безопасность
+- **Исправлен захардкоженный секретный ключ** в `web_server.py`
+  - Теперь используется `os.getenv('SECRET_KEY', secrets.token_hex(32))`
+  - Автоматическая генерация безопасного ключа при каждом запуске
+  - Возможность задать постоянный ключ через `.env`
 
-- ✅ **JSON Logging** - Структурированное логирование для ELK stack
-  - Настройка через `LOG_FORMAT=json` в .env
-  - Сериализованный JSON output для Elasticsearch
-  - Обратная совместимость с text форматом
+- **Добавлена валидация входных данных** в форме добавления ключевых слов
+  - Проверка длины (максимум 500 символов)
+  - Санитизация HTML-тегов для защиты от XSS
+  - Валидация параметров language и country
 
-- ✅ **Explicit Exports** - Явные импорты в __init__.py
-  - `services/__init__.py` - все сервисы
-  - `models/__init__.py` - все модели и схемы
-  - Улучшенная IDE поддержка и autocomplete
+### 🛡️ Надежность
+- **Улучшено управление сессиями БД** в `main.py`
+  - Отдельная сессия для каждого ключевого слова
+  - Корректное закрытие сессий в блоке finally
+  - Изоляция ошибок между задачами
+  - Предотвращение утечек соединений
 
-- ✅ **Lazy Redis Initialization** - Graceful degradation для healthcheck
-  - `get_redis_client()` с lru_cache
-  - Healthcheck работает даже без main.py
-  - Fallback на None если Redis недоступен
+- **Добавлена обработка ошибок JSON** в `extraction_service.py`
+  - Try-catch для `json.loads()` при парсинге ответа LLM
+  - Валидация структуры ответа (проверка на dict)
+  - Graceful degradation при некорректном ответе
+  - Логирование проблем для отладки
 
-### Improved
-- 🔧 **Healthcheck Robustness** - Исправлена инициализация зависимостей
-  - Async latency measurement для Redis
-  - Проверка availability перед использованием
-  - Лучшая обработка ошибок
+### ⚙️ Гибкость
+- **Все важные лимиты вынесены в настройки**
+  - `SEARCH_RESULTS_PER_KEYWORD` - количество сайтов на ключевое слово (по умолчанию 5)
+  - `MAX_KEYWORDS_PER_RUN` - максимум ключевых слов за запуск (по умолчанию 50)
+  - `LOG_LEVEL` - уровень логирования (DEBUG/INFO/WARNING/ERROR)
 
-- 🔧 **Mailto Parameter Handling** - Уже было исправлено
-  - Корректная очистка query параметров (`?subject=...`)
-  - Извлечение чистого email адреса
+- **Обновлен `.env.example`** с новыми настройками
+  - Добавлен раздел Pipeline Settings
+  - Добавлен раздел Logging
+  - Добавлен параметр SECRET_KEY
 
-### Performance
-- 📊 **Metrics**
-  - Тестовое покрытие: ~85% для services/utils
-  - Время выполнения тестов: <2 секунд
-  - Memory leak prevention: page/browser cleanup verified
+### 📊 Улучшения логирования
+- **Оптимизирована конфигурация логирования** в `main.py`
+  - Убрано дублирование `logger.remove()`
+  - Единая точка настройки уровня логирования
+  - Корректная поддержка обоих форматов (text/json)
+- Настраиваемый уровень логирования через `.env`
+- Более информативный формат логов с номером строки и функцией
+- Динамическая установка уровня из настроек
 
-### Documentation
-- 📝 Updated README with test instructions
-- 📝 Added troubleshooting section
-- 📝 Performance benchmarks
+### 📚 Документация
+- Создан файл `IMPROVEMENTS.md` с подробным описанием всех изменений
+- Обновлен `CHANGELOG.md` (этот файл)
+
+### 🔧 Исправления конфигурации
+- **Исправлен DATABASE_URL по умолчанию** в `config/settings.py`
+  - Изменен с PostgreSQL на MySQL (`mysql+pymysql://...`)
+  - Добавлен комментарий о поддержке обеих БД
+  - Устранена путаница с default значением
 
 ---
 
-## [1.0.0] - 2026-04-06
+## [1.0.0] - Предыдущая версия
 
-### Initial Release
-- Complete B2B contact mining pipeline
-- SERP API integration (SerpAPI/BrightData)
-- Playwright-based web crawler with prioritization
-- Multi-strategy contact extraction (regex + LLM fallback)
-- Email MX verification
-- Redis deduplication
-- Normalized PostgreSQL database
-- CSV/Excel export
-- FastAPI healthcheck endpoints
-- Daily scheduler
-- Rate limiting and robots.txt compliance
+### Основные возможности
+- Автоматический поиск B2B контактов
+- Интеллектуальный краулинг с приоритизацией
+- Извлечение email, Telegram, LinkedIn
+- Веб-интерфейс на Flask
+- Health check API на FastAPI
+- Планировщик задач
+- Поддержка нескольких LLM провайдеров
+- Верификация email через MX записи
+- Docker поддержка для Redis и MySQL
+
+---
+
+## 🔄 Миграция с версии 1.0.0 на 1.1.0
+
+### Необходимые действия:
+
+1. **Обновите файл `.env`**:
+   ```bash
+   # Добавьте новые параметры
+   SEARCH_RESULTS_PER_KEYWORD=5
+   MAX_KEYWORDS_PER_RUN=50
+   LOG_LEVEL=INFO
+   SECRET_KEY=  # Оставьте пустым или укажите свой ключ
+   ```
+
+2. **Перезапустите приложение**:
+   ```bash
+   start_all.bat restart  # Windows
+   ./start_all.sh restart  # Linux/Mac
+   ```
+
+3. **Проверьте работу**:
+   - Откройте http://localhost:5000
+   - Попробуйте добавить ключевое слово
+   - Проверьте логи на наличие ошибок
+
+### Совместимость:
+- ✅ Полностью обратно совместимо
+- ✅ Не требует изменений в базе данных
+- ✅ Не требует миграций
+- ✅ Работает с существующими данными
+
+---
+
+## 🎯 Планы на будущие версии
+
+### Версия 1.2.0 (Планируется)
+- [ ] Аутентификация для веб-интерфейса
+- [ ] CSRF защита форм
+- [ ] Rate limiting для API эндпоинтов
+- [ ] Экспорт результатов в CSV/Excel
+
+### Версия 1.3.0 (Планируется)
+- [ ] Миграции Alembic для управления схемой БД
+- [ ] Объединение health check эндпоинтов
+- [ ] Оптимизация переиспользования браузеров
+- [ ] Пакетная верификация email
+
+### Версия 2.0.0 (Долгосрочные планы)
+- [ ] Multi-tenant архитектура
+- [ ] REST API с полной документацией
+- [ ] WebSocket для real-time обновлений
+- [ ] Интеграция с Prometheus/Grafana
+- [ ] Kubernetes deployment manifests
+
+---
+
+## 📞 Поддержка
+
+Если вы обнаружили проблемы после обновления:
+
+1. Проверьте логи: `tail -f logs/*.log`
+2. Убедитесь, что все зависимости установлены: `pip install -r requirements.txt`
+3. Проверьте конфигурацию `.env`
+4. Создайте issue в репозитории с описанием проблемы
+
+---
+
+**Автор:** B2B Contact Miner Team  
+**Лицензия:** MIT

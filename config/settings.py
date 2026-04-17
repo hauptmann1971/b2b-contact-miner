@@ -88,6 +88,13 @@ class Settings(BaseSettings):
     SEARCH_RESULTS_PER_KEYWORD: int = 2  # Reduced for speed (was 5)
     MAX_KEYWORDS_PER_RUN: int = 50  # Максимальное количество ключевых слов за один запуск
     
+    # Task Queue Retry Settings
+    SEARCH_MAX_RETRIES: int = 3      # SERP API может fail
+    CRAWL_MAX_RETRIES: int = 2       # Сайт может быть down
+    EXTRACT_MAX_RETRIES: int = 1     # LLM может timeout
+    SAVE_MAX_RETRIES: int = 3        # DB lock issues
+    TASK_LOCK_TIMEOUT: int = 300     # seconds before lock expires (5 minutes)
+    
     # Logging
     LOG_FORMAT: str = "text"  # "text" or "json"
     LOG_LEVEL: str = "INFO"  # "DEBUG", "INFO", "WARNING", "ERROR"

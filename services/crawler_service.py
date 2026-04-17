@@ -295,3 +295,73 @@ class CrawlerService:
             )
         except:
             return False
+    
+    async def crawl_contact_pages(self, base_url: str, contact_page_paths: List[str]) -> Dict:
+        """Crawl only specific contact pages (fast extraction mode)
+        
+        Args:
+            base_url: Base domain URL
+            contact_page_paths: List of relative paths to contact pages
+            
+        Returns:
+            Dict with domain, content from contact pages, and metadata
+        """
+        domain = urlparse(base_url).netloc
+        logger.info(f"Fast crawling contact pages for {domain}: {len(contact_page_paths)} pages")
+        
+        all_content = []
+        pages_crawled = 0
+        start_time = time.time()
+        
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=settings.HEADLESS_BROWSER,
+                args=['--no-sandbox', '--disable-setuid-sandbox']
+            )
+            
+            try:
+                context = await browser.new_context(
+                    user_agent=self._get_random_user_agent(),
+                    viewport={'width': 1920, 'height': 1080},
+                    ignore_https_errors=True
+                )
+                
+                page = await context.new_page()
+                
+                try:
+                    for path in contact_page_paths:
+                        full_url = urljoin(base_url, path)
+                        
+                        try:
+                            content = await self._crawl_page_with_rotation(page, full_url)
+                            if content:
+                                all_content.append({
+                                    "url": full_url,
+                                    "content": content,
+                                    "type": "contact_page",
+                                    "priority": 10
+                                })
+                                pages_crawled += 1
+                                logger.debug(f"Crawled contact page: {full_url}")
+                            
+                            await asyncio.sleep(0.3)  # Short delay between pages
+                            
+                        except Exception as e:
+                            logger.warning(f"Failed to crawl contact page {full_url}: {e}")
+                            continue
+                finally:
+                    await page.close()
+                
+            finally:
+                await browser.close()
+        
+        duration = time.time() - start_time
+        logger.info(f"Completed fast crawl for {domain}: {pages_crawled} contact pages in {duration:.2f}s")
+        
+        return {
+            "domain": domain,
+            "pages_crawled": pages_crawled,
+            "content": all_content,
+            "duration": duration,
+            "skipped": False
+        }

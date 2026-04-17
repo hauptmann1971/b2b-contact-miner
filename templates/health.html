@@ -281,6 +281,14 @@
                 <a href="/api/keywords" target="_blank" class="refresh-btn" style="display: inline-block; margin-top: 10px; text-decoration: none;">Открыть →</a>
             </div>
         </div>
+        
+        <!-- Crawler Settings -->
+        <div class="health-section">
+            <h2>⚙️ Настройки Crawler</h2>
+            <div id="crawlerSettings">
+                <p style="color: #666;">Загрузка настроек...</p>
+            </div>
+        </div>
     </div>
     
     <script>
@@ -451,10 +459,75 @@
             }
         }
         
+        // Load crawler settings
+        async function loadCrawlerSettings() {
+            try {
+                const response = await fetch('/api/crawler-settings');
+                const data = await response.json();
+                
+                const container = document.getElementById('crawlerSettings');
+                container.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                        <div class="service-card">
+                            <div class="service-header">
+                                <span class="service-name">Domain Crawl Timeout</span>
+                            </div>
+                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.domain_crawl_timeout}s</p>
+                            <p style="color: #666; font-size: 0.9em;">Максимальное время на crawling одного домена</p>
+                        </div>
+                        
+                        <div class="service-card">
+                            <div class="service-header">
+                                <span class="service-name">Request Timeout</span>
+                            </div>
+                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.request_timeout}s</p>
+                            <p style="color: #666; font-size: 0.9em;">Timeout на одну страницу</p>
+                        </div>
+                        
+                        <div class="service-card">
+                            <div class="service-header">
+                                <span class="service-name">Max Pages per Domain</span>
+                            </div>
+                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.max_pages_per_domain}</p>
+                            <p style="color: #666; font-size: 0.9em;">Максимум страниц на домен</p>
+                        </div>
+                        
+                        <div class="service-card">
+                            <div class="service-header">
+                                <span class="service-name">Search Results per Keyword</span>
+                            </div>
+                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.search_results_per_keyword}</p>
+                            <p style="color: #666; font-size: 0.9em;">Количество сайтов для обработки</p>
+                        </div>
+                        
+                        <div class="service-card">
+                            <div class="service-header">
+                                <span class="service-name">Concurrent Browsers</span>
+                            </div>
+                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.concurrent_browsers}</p>
+                            <p style="color: #666; font-size: 0.9em;">Параллельных браузеров</p>
+                        </div>
+                        
+                        <div class="service-card">
+                            <div class="service-header">
+                                <span class="service-name">Delay Between Requests</span>
+                            </div>
+                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.delay_between_requests}s</p>
+                            <p style="color: #666; font-size: 0.9em;">Задержка между запросами</p>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading crawler settings:', error);
+                document.getElementById('crawlerSettings').innerHTML = '<p style="color: #dc3545;">Ошибка загрузки настроек</p>';
+            }
+        }
+        
         // Initial load
         loadFullHealth();
         loadLiveness();
         loadReadiness();
+        loadCrawlerSettings();
     </script>
 </body>
 </html>

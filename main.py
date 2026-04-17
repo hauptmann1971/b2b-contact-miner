@@ -161,7 +161,7 @@ class ContactMiningPipeline:
         
         try:
             # Retry search if it fails
-            search_results = await self._retry_search(keyword)
+            search_results, raw_response = await self._retry_search(keyword)
             
             if not search_results:
                 logger.warning(f"No search results for keyword: {keyword.keyword}")
@@ -170,7 +170,7 @@ class ContactMiningPipeline:
             
             # Save search results with retry
             raw_query = f"{keyword.keyword} site:{keyword.country}" if keyword.country else keyword.keyword
-            await self._retry_save_results(db, keyword.id, search_results, raw_query)
+            await self._retry_save_results(db, keyword.id, search_results, raw_query, raw_response)
             
             # Process each search result
             for idx, result in enumerate(search_results[:settings.SEARCH_RESULTS_PER_KEYWORD], 1):
@@ -220,18 +220,20 @@ class ContactMiningPipeline:
         return {"websites": websites_processed, "contacts": contacts_found}
     
     async def _retry_search(self, keyword, max_retries=3):
-        """Search with retry logic"""
+        """Search with retry logic
+        Returns: (search_results, raw_response)
+        """
         for attempt in range(1, max_retries + 1):
             try:
                 logger.info(f"Searching (attempt {attempt}/{max_retries})...")
-                search_results = self.serp.search(
+                search_results, raw_response = self.serp.search(
                     query=keyword.keyword,
                     country=keyword.country,
                     language=keyword.language,
                     num_results=2  # Minimal for speed
                 )
                 logger.info(f"✓ Search successful: {len(search_results)} results")
-                return search_results
+                return search_results, raw_response
             except Exception as e:
                 logger.warning(f"Search attempt {attempt} failed: {e}")
                 if attempt < max_retries:
@@ -240,13 +242,13 @@ class ContactMiningPipeline:
                     await asyncio.sleep(wait_time)
                 else:
                     logger.error(f"❌ Search failed after {max_retries} attempts")
-                    return []
+                    return [], None
     
-    async def _retry_save_results(self, db, keyword_id, search_results, raw_query=None, max_retries=3):
+    async def _retry_save_results(self, db, keyword_id, search_results, raw_query=None, raw_response=None, max_retries=3):
         """Save search results with retry logic"""
         for attempt in range(1, max_retries + 1):
             try:
-                self.serp.save_results(db, keyword_id, search_results, raw_query)
+                self.serp.save_results(db, keyword_id, search_results, raw_query, raw_response)
                 logger.info(f"✓ Saved {len(search_results)} search results")
                 return
             except Exception as e:

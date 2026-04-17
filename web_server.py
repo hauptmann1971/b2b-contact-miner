@@ -208,10 +208,88 @@ def health_check_page():
     return render_template('health.html')
 
 
+@app.route('/llm-data')
+def llm_data_page():
+    """Страница для просмотра LLM и search данных"""
+    return render_template('llm_data.html')
+
+
+@app.route('/api/llm-data')
+def api_llm_data():
+    """API endpoint для получения LLM и search данных"""
+    db = SessionLocal()
+    try:
+        # Статистика
+        total_search_results = db.query(SearchResult).count()
+        total_crawl_logs = db.query(CrawlLog).count()
+        llm_used_count = db.query(CrawlLog).filter(CrawlLog.llm_model.isnot(None)).count()
+        domains_with_contacts = db.query(DomainContact).filter(DomainContact.contacts_json.isnot(None)).count()
+        
+        # Последние 50 поисковых результатов с raw_query и raw_response
+        search_results = db.query(SearchResult).order_by(desc(SearchResult.id)).limit(50).all()
+        search_results_data = [{
+            'id': sr.id,
+            'keyword_id': sr.keyword_id,
+            'url': sr.url,
+            'raw_search_query': sr.raw_search_query,
+            'raw_search_response': sr.raw_search_response
+        } for sr in search_results]
+        
+        # Последние 50 crawl logs с LLM данными
+        crawl_logs = db.query(CrawlLog).filter(
+            CrawlLog.llm_model.isnot(None)
+        ).order_by(desc(CrawlLog.id)).limit(50).all()
+        crawl_logs_data = [{
+            'id': log.id,
+            'domain': log.domain,
+            'llm_model': log.llm_model,
+            'llm_request': log.llm_request,
+            'llm_response': log.llm_response
+        } for log in crawl_logs]
+        
+        # Domain contacts с JSON
+        domain_contacts = db.query(DomainContact).filter(
+            DomainContact.contacts_json.isnot(None)
+        ).order_by(desc(DomainContact.id)).limit(50).all()
+        contacts_json_data = [{
+            'id': dc.id,
+            'domain': dc.domain,
+            'contacts_json': dc.contacts_json
+        } for dc in domain_contacts]
+        
+        return jsonify({
+            'stats': {
+                'total_search_results': total_search_results,
+                'total_crawl_logs': total_crawl_logs,
+                'llm_used_count': llm_used_count,
+                'domains_with_contacts': domains_with_contacts
+            },
+            'search_results': search_results_data,
+            'crawl_logs': crawl_logs_data,
+            'contacts_json': contacts_json_data
+        })
+    finally:
+        db.close()
+
+
 @app.route('/api-docs')
 def api_docs_page():
     """Страница документации API"""
     return render_template('api_docs.html')
+
+
+@app.route('/api/crawler-settings')
+def api_crawler_settings():
+    """API endpoint для получения настроек crawler"""
+    from config.settings import settings
+    return jsonify({
+        'domain_crawl_timeout': settings.DOMAIN_CRAWL_TIMEOUT,
+        'request_timeout': settings.REQUEST_TIMEOUT,
+        'max_pages_per_domain': settings.MAX_PAGES_PER_DOMAIN,
+        'search_results_per_keyword': settings.SEARCH_RESULTS_PER_KEYWORD,
+        'concurrent_browsers': settings.CONCURRENT_BROWSERS,
+        'delay_between_requests': settings.DELAY_BETWEEN_REQUESTS
+    })
 
 
 @app.route('/delete_keyword/<int:keyword_id>', methods=['POST'])

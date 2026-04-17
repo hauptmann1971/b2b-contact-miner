@@ -165,14 +165,24 @@ async def liveness_check():
 
 @app.get("/metrics/pipeline")
 async def pipeline_metrics():
-    """Get pipeline execution metrics"""
+    """Get pipeline execution metrics with queue stats"""
     from utils.state_manager import StateManager
+    from workers.db_task_queue import DatabaseTaskQueue
     
     state_manager = StateManager()
     stats = state_manager.get_last_run_status()
     
+    # Get queue stats if available
+    queue_stats = {}
+    try:
+        if task_queue:
+            queue_stats = await task_queue.get_queue_stats()
+    except Exception as e:
+        logger.warning(f"Failed to get queue stats: {e}")
+    
     return {
         "pipeline": stats,
+        "queue": queue_stats,
         "timestamp": datetime.utcnow().isoformat()
     }
 

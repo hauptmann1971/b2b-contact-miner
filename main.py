@@ -64,9 +64,9 @@ class ContactMiningPipeline:
             logger.info("Task queue workers stopped")
     
     async def run_pipeline(self):
-        """Main pipeline execution"""
+        """Main pipeline execution - Orchestrator mode (async parallel)"""
         logger.info("="*60)
-        logger.info("Starting contact mining pipeline")
+        logger.info("Starting contact mining pipeline (ASYNC PARALLEL MODE)")
         logger.info("="*60)
         
         await self.initialize()
@@ -84,73 +84,71 @@ class ContactMiningPipeline:
                 logger.info("No pending keywords to process")
                 return
             
-            total_websites = len(pending_keywords) * settings.SEARCH_RESULTS_PER_KEYWORD
-            websites_processed = 0
-            contacts_found = 0
-            
+            # Add search tasks for all keywords to the queue
+            logger.info(f"\n📤 Adding {len(pending_keywords)} search tasks to queue...")
             for idx, keyword in enumerate(pending_keywords, 1):
-                # Для каждого ключевого слова создаем отдельную сессию БД
-                keyword_db = SessionLocal()
-                try:
-                    logger.info(f"\n{'='*80}")
-                    logger.info(f"Processing keyword [{idx}/{len(pending_keywords)}]: {keyword.keyword}")
-                    logger.info(f"{'='*80}")
-                    
-                    result = await self._process_keyword(keyword_db, keyword_service, keyword)
-                    websites_processed += result.get("websites", 0)
-                    contacts_found += result.get("contacts", 0)
-                    
-                    logger.info(f"\n📊 Progress: {idx}/{len(pending_keywords)} keywords")
-                    logger.info(f"   Total websites: {websites_processed}")
-                    logger.info(f"   Total contacts: {contacts_found}")
-                    
-                    # Update progress with retry
-                    try:
-                        self.state_manager.update_progress(
-                            keyword.id, 
-                            websites_processed, 
-                            contacts_found,
-                            total_websites
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to update progress: {e}")
-                    
-                except KeyboardInterrupt:
-                    logger.warning("\n⚠️  Pipeline interrupted by user")
-                    break
-                except Exception as e:
-                    logger.error(f"\n❌ Unexpected error processing keyword {keyword.id}: {e}")
-                    logger.debug(traceback.format_exc())
-                    
-                    # Rollback DB session to prevent PendingRollbackError
-                    try:
-                        keyword_db.rollback()
-                    except:
-                        pass
-                    
-                    # Mark as failed but continue with next keyword
-                    try:
-                        self.state_manager.mark_failed(keyword.id, str(e))
-                    except:
-                        pass
-                    
-                    # Continue with next keyword instead of crashing
-                    logger.info("Continuing with next keyword...")
-                    continue
-                finally:
-                    # Rollback any pending transactions and close session
-                    try:
-                        keyword_db.rollback()
-                    except:
-                        pass
-                    # Закрываем сессию для текущего ключевого слова
-                    keyword_db.close()
+                await self.task_queue.add_task(
+                    task_name=f"search_{keyword.id}",
+                    task_type='search_keyword',
+                    payload={
+                        'keyword_id': keyword.id,
+                        'keyword': keyword.keyword,
+                        'language': keyword.language,
+                        'country': keyword.country
+                    },
+                    priority=10,  # High priority for search tasks
+                    keyword_id=keyword.id
+                )
+                logger.info(f"   [{idx}/{len(pending_keywords)}] Added search task for: {keyword.keyword}")
             
-            logger.info(f"Pipeline completed: {websites_processed} websites, {contacts_found} contacts")
+            logger.info(f"\n✅ All search tasks added to queue. Workers will process them automatically.")
+            logger.info(f"   Queue stats: {await self.task_queue.get_queue_stats()}")
+            
+            # Wait for all tasks to complete
+            await self._wait_for_completion(pending_keywords)
+            
+            logger.info(f"\n🎉 Pipeline completed successfully!")
         
         finally:
             db.close()
             await self.shutdown()
+    
+    async def _wait_for_completion(self, keywords: list, timeout_hours: int = 2):
+        """Wait for all tasks to complete with progress monitoring"""
+        import time
+        start_time = time.time()
+        timeout_seconds = timeout_hours * 3600
+        
+        logger.info(f"\n⏳ Waiting for tasks to complete (timeout: {timeout_hours}h)...")
+        
+        while True:
+            # Check timeout
+            elapsed = time.time() - start_time
+            if elapsed > timeout_seconds:
+                logger.error(f"❌ Pipeline timeout after {elapsed/3600:.1f} hours")
+                break
+            
+            # Get queue stats
+            stats = await self.task_queue.get_queue_stats()
+            
+            # Check if all tasks completed
+            if stats['pending'] == 0 and stats['running'] == 0:
+                logger.info(f"\n✅ All tasks completed!")
+                logger.info(f"   Total: {stats['total']} tasks")
+                logger.info(f"   Completed: {stats['completed']}")
+                logger.info(f"   Failed: {stats['failed']}")
+                break
+            
+            # Log progress every 30 seconds
+            logger.info(
+                f"\r📊 Queue: {stats['pending']} pending | "
+                f"{stats['running']} running | "
+                f"{stats['completed']} completed | "
+                f"{stats['failed']} failed | "
+                f"{stats['keywords_in_progress']} keywords in progress"
+            )
+            
+            await asyncio.sleep(30)
     
     async def _process_keyword(self, db: Session, keyword_service: KeywordService, keyword) -> dict:
         """Process a single keyword with error handling and retry"""

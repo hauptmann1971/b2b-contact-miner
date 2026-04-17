@@ -1,27 +1,60 @@
-"""Database-backed task queue service"""
+"""Database-backed task queue service with async parallel processing"""
 import json
 import asyncio
-from typing import Callable, Any, Optional, Dict
+from typing import Callable, Any, Optional, Dict, List
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from loguru import logger
-from models.database import SessionLocal
+from models.database import SessionLocal, SearchResult, DomainContact, Contact, ContactType, CrawlLog, Keyword
 from models.task_queue import TaskQueue
+from config.settings import settings
+from services.serp_service import SerpService
+from services.crawler_service import CrawlerService
+from services.extraction_service import ExtractionService
+from urllib.parse import urlparse
 
 
 class DatabaseTaskQueue:
     """Persistent task queue using MySQL database instead of Redis"""
     
-    def __init__(self, max_concurrent: int = 20, lock_timeout: int = 300):
+    def __init__(self, max_concurrent: int = 20, lock_timeout: int = None):
         self.max_concurrent = max_concurrent
-        self.lock_timeout = lock_timeout  # seconds before lock expires
+        self.lock_timeout = lock_timeout or settings.TASK_LOCK_TIMEOUT  # seconds before lock expires
         self.running = False
         self.workers = []
         self.current_tasks = 0
         self.tasks_semaphore = asyncio.Semaphore(max_concurrent)
+        
+        # Initialize services (lazy loading to avoid circular imports)
+        self._serp_service = None
+        self._crawler_service = None
+        self._extraction_service = None
+    
+    def _get_serp_service(self):
+        """Lazy load SerpService"""
+        if self._serp_service is None:
+            self._serp_service = SerpService()
+        return self._serp_service
+    
+    def _get_crawler_service(self):
+        """Lazy load CrawlerService"""
+        if self._crawler_service is None:
+            self._crawler_service = CrawlerService()
+        return self._crawler_service
+    
+    def _get_extraction_service(self):
+        """Lazy load ExtractionService"""
+        if self._extraction_service is None:
+            self._extraction_service = ExtractionService()
+        return self._extraction_service
     
     async def start_workers(self):
-        """Start worker tasks"""
+        """Start worker tasks and recover stale tasks"""
+        # Recover any stale tasks from previous crashes
+        recovered = await self.recover_stale_tasks()
+        if recovered > 0:
+            logger.info(f"Recovered {recovered} stale tasks before starting workers")
+        
         self.running = True
         for i in range(self.max_concurrent):
             worker = asyncio.create_task(self._worker(i))
@@ -39,9 +72,31 @@ class DatabaseTaskQueue:
         logger.info("All database workers stopped")
     
     async def add_task(self, task_name: str, task_type: str, payload: Dict, 
-                      priority: int = 0, max_retries: int = 3, 
+                      priority: int = 0, max_retries: int = None,
+                      keyword_id: int = None, depends_on_task_id: int = None,
                       scheduled_for: Optional[datetime] = None):
-        """Add task to database queue"""
+        """Add task to database queue
+        
+        Args:
+            task_name: Human-readable task name
+            task_type: Type of task (search_keyword, crawl_domain, extract_contacts, save_results)
+            payload: Task data as dict (will be JSON serialized)
+            priority: Priority level (higher = more important)
+            max_retries: Max retry attempts (uses settings default if None)
+            keyword_id: Associated keyword ID for tracking
+            depends_on_task_id: Parent task ID (task won't run until parent completes)
+            scheduled_for: Delayed execution time
+        """
+        # Set default max_retries based on task type
+        if max_retries is None:
+            retry_map = {
+                'search_keyword': settings.SEARCH_MAX_RETRIES,
+                'crawl_domain': settings.CRAWL_MAX_RETRIES,
+                'extract_contacts': settings.EXTRACT_MAX_RETRIES,
+                'save_results': settings.SAVE_MAX_RETRIES,
+            }
+            max_retries = retry_map.get(task_type, 3)
+        
         try:
             db = SessionLocal()
             task = TaskQueue(
@@ -50,13 +105,15 @@ class DatabaseTaskQueue:
                 payload=json.dumps(payload),
                 priority=priority,
                 max_retries=max_retries,
+                keyword_id=keyword_id,
+                depends_on_task_id=depends_on_task_id,
                 scheduled_for=scheduled_for,
                 status='pending'
             )
             db.add(task)
             db.commit()
             db.refresh(task)
-            logger.debug(f"Task added to DB queue: {task.id} ({task_type})")
+            logger.debug(f"Task added to DB queue: {task.id} ({task_type}) [priority={priority}, keyword={keyword_id}]")
             return task.id
         except Exception as e:
             db.rollback()
@@ -102,21 +159,32 @@ class DatabaseTaskQueue:
                 await asyncio.sleep(1)
     
     async def _fetch_next_task(self, worker_name: str) -> Optional[TaskQueue]:
-        """Fetch next pending task and lock it"""
+        """Fetch next pending task and lock it (respects dependencies)"""
         try:
             db = SessionLocal()
             
             # Find next pending task (ordered by priority DESC, created_at ASC)
             now = datetime.now(timezone.utc)
-            task = db.query(TaskQueue).filter(
+            tasks = db.query(TaskQueue).filter(
                 TaskQueue.status == 'pending',
                 (TaskQueue.scheduled_for == None) | (TaskQueue.scheduled_for <= now)
             ).order_by(
                 TaskQueue.priority.desc(),
                 TaskQueue.created_at.asc()
-            ).first()
+            ).all()
             
-            if task:
+            # Check dependencies and find first executable task
+            for task in tasks:
+                # Check if task has unmet dependencies
+                if task.depends_on_task_id:
+                    parent = db.query(TaskQueue).filter(
+                        TaskQueue.id == task.depends_on_task_id
+                    ).first()
+                    
+                    if not parent or parent.status != 'completed':
+                        # Parent not completed yet, skip this task
+                        continue
+                
                 # Lock the task
                 task.status = 'running'
                 task.locked_by = worker_name
@@ -124,7 +192,7 @@ class DatabaseTaskQueue:
                 task.started_at = now
                 db.commit()
                 db.refresh(task)
-                logger.debug(f"Worker {worker_name} locked task {task.id}")
+                logger.debug(f"Worker {worker_name} locked task {task.id} ({task.task_type})")
                 return task
             
             return None
@@ -140,67 +208,267 @@ class DatabaseTaskQueue:
             payload = json.loads(task.payload)
             
             # Route to appropriate handler based on task_type
-            if task.task_type == 'crawl_domain':
+            if task.task_type == 'search_keyword':
+                await self._handle_search_task(task.id, payload)
+            elif task.task_type == 'crawl_domain':
                 await self._handle_crawl_task(task.id, payload)
             elif task.task_type == 'extract_contacts':
-                await self._handle_extraction_task(task.id, payload)
-            elif task.task_type == 'translate_keyword':
-                await self._handle_translation_task(task.id, payload)
+                await self._handle_extract_task(task.id, payload)
             else:
                 logger.warning(f"Unknown task type: {task.task_type}")
                 await self._handle_task_failure(task.id, f"Unknown task type: {task.task_type}")
                 return
             
-            # Mark as completed
+            # Mark as completed (handlers already created child tasks)
             await self._handle_task_completion(task.id, {"status": "success"})
-            logger.info(f"Task {task.id} ({task.task_type}) completed successfully")
+            logger.info(f"✅ Task {task.id} ({task.task_type}) completed successfully")
             
         except Exception as e:
-            logger.error(f"Task {task.id} execution failed: {e}")
+            logger.error(f"❌ Task {task.id} execution failed: {e}")
             raise
     
-    async def _handle_crawl_task(self, task_id: int, payload: Dict):
-        """Handle domain crawling task"""
-        # Import here to avoid circular imports
-        from main import ContactMiningPipeline
-        
-        keyword_id = payload.get('keyword_id')
-        domain = payload.get('domain')
-        
-        if not keyword_id or not domain:
-            raise ValueError("Missing keyword_id or domain in payload")
-        
-        # Create pipeline instance and run crawl
-        pipeline = ContactMiningPipeline()
-        await pipeline.initialize()
-        
-        try:
-            result = await pipeline.crawl_single_domain(keyword_id, domain)
-            await self._handle_task_completion(task_id, result)
-        finally:
-            await pipeline.close()
-    
-    async def _handle_extraction_task(self, task_id: int, payload: Dict):
-        """Handle contact extraction task"""
-        # Implementation for contact extraction
-        logger.info(f"Executing extraction task {task_id}")
-        # TODO: Implement extraction logic
-        await self._handle_task_completion(task_id, {"status": "extracted"})
-    
-    async def _handle_translation_task(self, task_id: int, payload: Dict):
-        """Handle keyword translation task"""
-        from services.translation_service import TranslationService
-        
+    async def _handle_search_task(self, task_id: int, payload: Dict):
+        """Handle keyword search task - creates crawl tasks for each result"""
         keyword_id = payload.get('keyword_id')
         keyword_text = payload.get('keyword')
+        language = payload.get('language', 'ru')
+        country = payload.get('country', 'RU')
         
         if not keyword_id or not keyword_text:
             raise ValueError("Missing keyword_id or keyword in payload")
         
-        translator = TranslationService()
-        translations = await translator.translate_to_russian([keyword_text])
+        logger.info(f"🔍 Searching for keyword {keyword_id}: '{keyword_text}' ({language}/{country})")
         
-        await self._handle_task_completion(task_id, {"translations": translations})
+        # Perform search
+        serp = self._get_serp_service()
+        search_results, raw_response = serp.search(
+            query=keyword_text,
+            country=country,
+            language=language,
+            num_results=settings.SEARCH_RESULTS_PER_KEYWORD
+        )
+        
+        if not search_results:
+            logger.warning(f"No search results for keyword {keyword_id}")
+            return
+        
+        # Save search results to DB
+        db = SessionLocal()
+        try:
+            raw_query = f"{keyword_text} site:{country}" if country else keyword_text
+            serp.save_results(db, keyword_id, search_results, raw_query, raw_response)
+            logger.info(f"✓ Saved {len(search_results)} search results for keyword {keyword_id}")
+            
+            # Create crawl tasks for each URL
+            for idx, result in enumerate(search_results):
+                # Get the search_result_id we just saved
+                sr = db.query(SearchResult).filter(
+                    SearchResult.keyword_id == keyword_id,
+                    SearchResult.url == result['url']
+                ).first()
+                
+                if sr:
+                    await self.add_task(
+                        task_name=f"crawl_{sr.id}",
+                        task_type='crawl_domain',
+                        payload={
+                            'search_result_id': sr.id,
+                            'url': result['url'],
+                            'keyword_id': keyword_id
+                        },
+                        priority=5,
+                        keyword_id=keyword_id,
+                        depends_on_task_id=task_id  # Depends on search completion
+                    )
+            
+            db.commit()
+            logger.info(f"✓ Created {len(search_results)} crawl tasks for keyword {keyword_id}")
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to save search results: {e}")
+            raise
+        finally:
+            db.close()
+    
+    async def _handle_crawl_task(self, task_id: int, payload: Dict):
+        """Handle domain crawling task - creates extract task"""
+        search_result_id = payload.get('search_result_id')
+        url = payload.get('url')
+        keyword_id = payload.get('keyword_id')
+        
+        if not search_result_id or not url:
+            raise ValueError("Missing search_result_id or url in payload")
+        
+        logger.info(f"🕷️  Crawling domain: {url}")
+        
+        # Crawl the domain
+        crawler = self._get_crawler_service()
+        crawl_data = await crawler.crawl_domain(url)
+        
+        if crawl_data.get("skipped"):
+            logger.info(f"⊘ Skipped crawling {url}")
+            return
+        
+        # Save crawl log
+        db = SessionLocal()
+        try:
+            from models.database import CrawlLog
+            import time
+            
+            crawl_log = CrawlLog(
+                domain=crawl_data["domain"],
+                url=url,
+                status_code=200,
+                pages_crawled=crawl_data["pages_crawled"],
+                duration_seconds=int(crawl_data["duration"])
+            )
+            db.add(crawl_log)
+            db.commit()
+            logger.debug(f"✓ Saved crawl log for {url}")
+            
+            # Extract contact page URLs from crawled content
+            contact_page_urls = []
+            for item in crawl_data.get("content", []):
+                if item.get("type") == "contact_page":
+                    # Get relative path
+                    from urllib.parse import urlparse
+                    parsed = urlparse(item['url'])
+                    contact_page_urls.append(parsed.path)
+            
+            # Create extract task
+            if contact_page_urls or crawl_data.get("content"):
+                await self.add_task(
+                    task_name=f"extract_{search_result_id}",
+                    task_type='extract_contacts',
+                    payload={
+                        'search_result_id': search_result_id,
+                        'url': url,
+                        'domain': crawl_data['domain'],
+                        'keyword_id': keyword_id,
+                        'contact_page_urls': contact_page_urls[:5]  # Limit to top 5
+                    },
+                    priority=7,
+                    keyword_id=keyword_id,
+                    depends_on_task_id=task_id
+                )
+                logger.info(f"✓ Created extract task for {url}")
+            else:
+                logger.warning(f"No contact pages found for {url}")
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to save crawl data: {e}")
+            raise
+        finally:
+            db.close()
+    
+    async def _handle_extract_task(self, task_id: int, payload: Dict):
+        """Handle contact extraction - saves final results to DB"""
+        search_result_id = payload.get('search_result_id')
+        url = payload.get('url')
+        domain = payload.get('domain')
+        keyword_id = payload.get('keyword_id')
+        contact_page_urls = payload.get('contact_page_urls', [])
+        
+        if not search_result_id or not domain:
+            raise ValueError("Missing search_result_id or domain in payload")
+        
+        logger.info(f"🔎 Extracting contacts from {domain}")
+        
+        # Crawl contact pages (fast mode)
+        crawler = self._get_crawler_service()
+        if contact_page_urls:
+            crawl_data = await crawler.crawl_contact_pages(url, contact_page_urls)
+        else:
+            # Fallback: re-crawl entire domain if no contact pages identified
+            crawl_data = await crawler.crawl_domain(url)
+        
+        if not crawl_data.get("content"):
+            logger.warning(f"No content to extract from {domain}")
+            return
+        
+        # Extract contacts
+        extractor = self._get_extraction_service()
+        contacts, llm_data = extractor.extract_contacts(crawl_data["content"])
+        
+        # Verify emails via MX records
+        if contacts.emails:
+            verified_emails = await extractor.batch_verify_emails(contacts.emails)
+            logger.info(f"✓ Email verification: {sum(verified_emails.values())}/{len(verified_emails)} valid")
+        
+        # Save to database
+        db = SessionLocal()
+        try:
+            # Create DomainContact with JSON
+            contacts_data = {
+                "emails": contacts.emails,
+                "telegram": contacts.telegram_links,
+                "linkedin": contacts.linkedin_links,
+                "phones": contacts.phone_numbers if hasattr(contacts, 'phone_numbers') else []
+            }
+            
+            domain_contact = DomainContact(
+                search_result_id=search_result_id,
+                domain=domain,
+                tags=[],
+                contacts_json=contacts_data,
+                confidence_score=extractor.calculate_confidence(contacts),
+                extraction_method="llm" if settings.USE_LLM_EXTRACTION else "regex"
+            )
+            db.add(domain_contact)
+            db.flush()  # Get the ID
+            
+            # Create normalized Contact records
+            for email in contacts.emails:
+                contact = Contact(
+                    domain_contact_id=domain_contact.id,
+                    contact_type=ContactType.EMAIL,
+                    value=email
+                )
+                db.add(contact)
+            
+            for tg in contacts.telegram_links:
+                contact = Contact(
+                    domain_contact_id=domain_contact.id,
+                    contact_type=ContactType.TELEGRAM,
+                    value=tg
+                )
+                db.add(contact)
+            
+            for li in contacts.linkedin_links:
+                contact = Contact(
+                    domain_contact_id=domain_contact.id,
+                    contact_type=ContactType.LINKEDIN,
+                    value=li
+                )
+                db.add(contact)
+            
+            # Update crawl log with LLM data if available
+            if llm_data:
+                crawl_log = db.query(CrawlLog).filter(
+                    CrawlLog.domain == domain,
+                    CrawlLog.url == url
+                ).order_by(CrawlLog.crawled_at.desc()).first()
+                
+                if crawl_log:
+                    crawl_log.llm_request = llm_data.get("request")
+                    crawl_log.llm_response = llm_data.get("response")
+                    crawl_log.llm_model = llm_data.get("model")
+            
+            db.commit()
+            
+            total_contacts = len(contacts.emails) + len(contacts.telegram_links) + len(contacts.linkedin_links)
+            logger.info(f"✅ Saved {total_contacts} contacts for {domain}: "
+                       f"{len(contacts.emails)} emails, {len(contacts.telegram_links)} Telegram, "
+                       f"{len(contacts.linkedin_links)} LinkedIn")
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to save contacts for {domain}: {e}")
+            raise
+        finally:
+            db.close()
     
     async def _handle_task_completion(self, task_id: int, result: Dict):
         """Mark task as completed"""
@@ -249,7 +517,7 @@ class DatabaseTaskQueue:
             db.close()
     
     async def get_queue_stats(self) -> Dict:
-        """Get queue statistics"""
+        """Get queue statistics with keyword breakdown"""
         try:
             db = SessionLocal()
             stats = {
@@ -260,6 +528,15 @@ class DatabaseTaskQueue:
                 'total': db.query(TaskQueue).count(),
                 'current_workers': self.current_tasks
             }
+            
+            # Add keyword-level stats
+            keywords_in_progress = db.query(TaskQueue.keyword_id).filter(
+                TaskQueue.keyword_id.isnot(None),
+                TaskQueue.status.in_(['pending', 'running'])
+            ).distinct().count()
+            
+            stats['keywords_in_progress'] = keywords_in_progress
+            
             return stats
         except Exception as e:
             logger.error(f"Failed to get queue stats: {e}")
@@ -283,6 +560,37 @@ class DatabaseTaskQueue:
             return deleted
         except Exception as e:
             logger.error(f"Failed to clear old tasks: {e}")
+            return 0
+        finally:
+            db.close()
+    
+    async def recover_stale_tasks(self):
+        """Recover tasks that are stuck in 'running' state (worker crashed)"""
+        try:
+            db = SessionLocal()
+            timeout_threshold = datetime.now(timezone.utc) - timedelta(seconds=self.lock_timeout)
+            
+            stale_tasks = db.query(TaskQueue).filter(
+                TaskQueue.status == 'running',
+                TaskQueue.locked_at < timeout_threshold
+            ).all()
+            
+            if stale_tasks:
+                logger.warning(f"Found {len(stale_tasks)} stale running tasks, recovering...")
+                
+                for task in stale_tasks:
+                    task.status = 'pending'
+                    task.locked_by = None
+                    task.locked_at = None
+                    task.error_message = f"Task recovered from stale state (locked at {task.locked_at})"
+                
+                db.commit()
+                logger.info(f"✓ Recovered {len(stale_tasks)} stale tasks")
+                return len(stale_tasks)
+            
+            return 0
+        except Exception as e:
+            logger.error(f"Failed to recover stale tasks: {e}")
             return 0
         finally:
             db.close()

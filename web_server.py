@@ -320,7 +320,7 @@ def health_check():
     import requests
     try:
         # Проксируем запрос к FastAPI monitoring сервису
-        response = requests.get('http://localhost:8000/health', timeout=5)
+        response = requests.get('http://localhost:8000/health/health', timeout=5)
         return response.json(), response.status_code
     except Exception as e:
         # Fallback если monitoring недоступен
@@ -338,31 +338,30 @@ def health_check():
 
 @app.route('/health/live')
 def liveness_check():
-    """Проверка живости приложения - проксирует к FastAPI monitoring"""
-    import requests
-    try:
-        response = requests.get('http://localhost:8000/health/live', timeout=5)
-        return response.json(), response.status_code
-    except Exception as e:
-        return {
-            'status': 'unhealthy',
-            'timestamp': datetime.utcnow().isoformat(),
-            'error': f'Monitoring service unavailable: {str(e)}'
-        }, 503
+    """Проверка живости приложения"""
+    return {
+        'status': 'alive',
+        'timestamp': datetime.utcnow().isoformat()
+    }, 200
 
 
 @app.route('/health/ready')
 def readiness_check():
-    """Проверка готовности приложения - проксирует к FastAPI monitoring"""
-    import requests
+    """Проверка готовности приложения"""
+    # Проверяем подключение к БД
     try:
-        response = requests.get('http://localhost:8000/health/ready', timeout=5)
-        return response.json(), response.status_code
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return {
+            'status': 'ready',
+            'timestamp': datetime.utcnow().isoformat()
+        }, 200
     except Exception as e:
         return {
             'status': 'not_ready',
             'timestamp': datetime.utcnow().isoformat(),
-            'error': f'Monitoring service unavailable: {str(e)}'
+            'error': str(e)
         }, 503
 
 

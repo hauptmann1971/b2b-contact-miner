@@ -313,7 +313,7 @@
             }
         }
         
-        function loadFullHealth() {
+                function loadFullHealth() {
             console.log('Loading full health check...');
             const btn = document.getElementById('btn-full-health');
             if (btn) {
@@ -331,6 +331,8 @@
                 })
                 .then(data => {
                     console.log('Health data received:', data);
+                    
+                    // Update overall status
                     const overallStatus = document.getElementById('overall-status');
                     if (data.status === 'healthy') {
                         overallStatus.className = 'overall-status overall-healthy';
@@ -340,60 +342,48 @@
                         overallStatus.innerHTML = '<span class="status-indicator status-unhealthy"></span> Обнаружены проблемы';
                     }
                     
+                    // Build HTML from flat data structure
                     let html = '<div class="timestamp">Последняя проверка: ' + formatTimestamp(data.timestamp) + '</div>';
                     
-                    for (const [service, statusData] of Object.entries(data.services)) {
-                        // Handle both simple status strings and complex objects
-                        const status = typeof statusData === 'string' ? statusData : statusData.status;
-                        const additionalInfo = typeof statusData === 'object' ? statusData : null;
-                        
-                        let serviceHtml = `
+                    // Display database status
+                    if (data.database) {
+                        const dbStatus = data.database === 'healthy' ? 'healthy' : 'unhealthy';
+                        html += `
                             <div class="service-card">
                                 <div class="service-header">
-                                    <span class="service-name">${service.charAt(0).toUpperCase() + service.slice(1)}</span>
-                                    ${getStatusBadge(status)}
+                                    <span class="service-name">Database</span>
+                                    ${getStatusBadge(dbStatus)}
                                 </div>
+                                <p style="color: #666; margin-top: 10px;">${data.database}</p>
+                            </div>
                         `;
-                        
-                        // Add additional information for task_queue
-                        if (service === 'task_queue' && additionalInfo) {
-                            if (additionalInfo.type) {
-                                serviceHtml += `<p style="color: #666; margin-top: 10px;"><strong>Тип:</strong> ${additionalInfo.type === 'database' ? '💾 Database-backed' : additionalInfo.type}</p>`;
-                            }
-                            if (additionalInfo.pending_tasks !== undefined) {
-                                serviceHtml += `
-                                    <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                                        <div style="background: white; padding: 10px; border-radius: 5px;">
-                                            <div style="font-size: 0.8em; color: #666;">В ожидании</div>
-                                            <div style="font-size: 1.5em; font-weight: bold; color: #667eea;">${additionalInfo.pending_tasks}</div>
-                                        </div>
-                                        <div style="background: white; padding: 10px; border-radius: 5px;">
-                                            <div style="font-size: 0.8em; color: #666;">Выполняется</div>
-                                            <div style="font-size: 1.5em; font-weight: bold; color: #ffc107;">${additionalInfo.running_tasks || 0}</div>
-                                        </div>
-                                        <div style="background: white; padding: 10px; border-radius: 5px;">
-                                            <div style="font-size: 0.8em; color: #666;">Завершено</div>
-                                            <div style="font-size: 1.5em; font-weight: bold; color: #28a745;">${additionalInfo.completed_tasks || 0}</div>
-                                        </div>
-                                        <div style="background: white; padding: 10px; border-radius: 5px;">
-                                            <div style="font-size: 0.8em; color: #666;">Ошибки</div>
-                                            <div style="font-size: 1.5em; font-weight: bold; color: #dc3545;">${additionalInfo.failed_tasks || 0}</div>
-                                        </div>
-                                    </div>
-                                `;
-                            }
-                            if (additionalInfo.note) {
-                                serviceHtml += `<p style="color: #856404; margin-top: 10px; font-style: italic;">ℹ️ ${additionalInfo.note}</p>`;
-                            }
-                        }
-                        
-                        // Add latency info for database
-                        if (service === 'database' && additionalInfo && additionalInfo.latency_ms) {
-                            serviceHtml += `<p style="color: #666; margin-top: 10px;"><strong>Задержка:</strong> ${additionalInfo.latency_ms} ms</p>`;
-                        }
-                        
-                        serviceHtml += '</div>';
-                        html += serviceHtml;
+                    }
+                    
+                    // Display web server status
+                    if (data.web_server) {
+                        html += `
+                            <div class="service-card">
+                                <div class="service-header">
+                                    <span class="service-name">Web Server</span>
+                                    ${getStatusBadge('healthy')}
+                                </div>
+                                <p style="color: #666; margin-top: 10px;">${data.web_server}</p>
+                            </div>
+                        `;
+                    }
+                    
+                    // Display monitoring service status
+                    if (data.monitoring_service) {
+                        const monStatus = data.monitoring_service === 'running' ? 'healthy' : 'warning';
+                        html += `
+                            <div class="service-card">
+                                <div class="service-header">
+                                    <span class="service-name">Monitoring Service</span>
+                                    ${getStatusBadge(monStatus)}
+                                </div>
+                                <p style="color: #666; margin-top: 10px;">${data.monitoring_service}</p>
+                            </div>
+                        `;
                     }
                     
                     document.getElementById('full-health').innerHTML = html;

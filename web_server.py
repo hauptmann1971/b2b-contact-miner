@@ -316,24 +316,28 @@ def delete_keyword(keyword_id):
 # Health Check Endpoints
 @app.route('/health')
 def health_check():
-    """Полная проверка здоровья системы - проксирует к FastAPI monitoring"""
-    import requests
+    """Полная проверка здоровья системы"""
+    from sqlalchemy import text
+    
+    # Проверяем БД
+    db_status = "healthy"
     try:
-        # Проксируем запрос к FastAPI monitoring сервису
-        response = requests.get('http://localhost:8000/health/health', timeout=5)
-        return response.json(), response.status_code
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
     except Exception as e:
-        # Fallback если monitoring недоступен
-        return {
-            'status': 'unhealthy',
-            'timestamp': datetime.utcnow().isoformat(),
-            'services': {
-                'database': 'unknown',
-                'task_queue': 'unknown',
-                'monitoring_error': str(e)
-            },
-            'error': f'Monitoring service unavailable: {str(e)}'
-        }, 503
+        db_status = f"unhealthy: {str(e)}"
+    
+    # Возвращаем статус
+    status_code = 200 if db_status == "healthy" else 503
+    
+    return {
+        'status': 'healthy' if status_code == 200 else 'degraded',
+        'timestamp': datetime.utcnow().isoformat(),
+        'database': db_status,
+        'web_server': 'running',
+        'monitoring_service': 'not_available'
+    }, status_code
 
 
 @app.route('/health/live')

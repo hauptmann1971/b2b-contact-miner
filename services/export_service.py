@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models.database import DomainContact, Contact, ContactType, Keyword
+from models.database import DomainContact, Contact, ContactType, Keyword, SearchResult
 from typing import List, Optional
 from datetime import datetime
 import csv
@@ -10,6 +10,133 @@ from loguru import logger
 class ExportService:
     def __init__(self, db: Session):
         self.db = db
+    
+    def export_to_flat_csv(self, filters: dict = None) -> str:
+        """Export contacts to flat CSV format with keyword info"""
+        contacts = self._query_contacts_with_keyword(filters)
+        
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';')
+        
+        # Headers in Russian
+        writer.writerow([
+            "№",
+            "Ключевое слово",
+            "Страна",
+            "Язык",
+            "Домен",
+            "Email",
+            "Telegram",
+            "LinkedIn",
+            "Телефон",
+            "Предметная область"
+        ])
+        
+        row_number = 1
+        for contact_data in contacts:
+            writer.writerow([
+                row_number,
+                contact_data['keyword'],
+                contact_data['country'],
+                contact_data['language'],
+                contact_data['domain'],
+                contact_data['email'],
+                contact_data['telegram'],
+                contact_data['linkedin'],
+                contact_data['phone'],
+                contact_data.get('subject_area', '')
+            ])
+            row_number += 1
+        
+        logger.info(f"Exported {row_number - 1} contacts to flat CSV")
+        return output.getvalue()
+    
+    def _query_contacts_with_keyword(self, filters: dict = None) -> List[dict]:
+        """Query contacts joined with keyword and search result info"""
+        query = (
+            self.db.query(
+                Keyword.keyword,
+                Keyword.country,
+                Keyword.language,
+                DomainContact.domain,
+                DomainContact.tags,
+                Contact.contact_type,
+                Contact.value
+            )
+            .join(SearchResult, DomainContact.search_result_id == SearchResult.id)
+            .join(Keyword, SearchResult.keyword_id == Keyword.id)
+            .join(Contact, Contact.domain_contact_id == DomainContact.id)
+        )
+        
+        if filters:
+            if "keyword_id" in filters:
+                query = query.filter(Keyword.id == filters["keyword_id"])
+            
+            if "country" in filters:
+                query = query.filter(Keyword.country == filters["country"])
+            
+            if "contact_type" in filters:
+                query = query.filter(Contact.contact_type == filters["contact_type"])
+            
+            if "domain" in filters:
+                query = query.filter(DomainContact.domain.ilike(f"%{filters['domain']}%"))
+        
+        results = query.order_by(Keyword.id, DomainContact.domain).all()
+        
+        # Group by domain to combine all contact types
+        domain_groups = {}
+        for row in results:
+            key = (row.keyword, row.country, row.language, row.domain)
+            if key not in domain_groups:
+                domain_groups[key] = {
+                    'keyword': row.keyword,
+                    'country': row.country,
+                    'language': row.language,
+                    'domain': row.domain,
+                    'emails': [],
+                    'telegrams': [],
+                    'linkedins': [],
+                    'phones': [],
+                    'tags': row.tags or []
+                }
+            
+            if row.contact_type == ContactType.EMAIL:
+                domain_groups[key]['emails'].append(row.value)
+            elif row.contact_type == ContactType.TELEGRAM:
+                domain_groups[key]['telegrams'].append(row.value)
+            elif row.contact_type == ContactType.LINKEDIN:
+                domain_groups[key]['linkedins'].append(row.value)
+            elif row.contact_type == ContactType.PHONE:
+                domain_groups[key]['phones'].append(row.value)
+        
+        # Convert to list of dicts
+        flat_contacts = []
+        for key, data in domain_groups.items():
+            # Create one row per domain with all contacts
+            flat_contacts.append({
+                'keyword': data['keyword'],
+                'country': data['country'],
+                'language': data['language'],
+                'domain': data['domain'],
+                'email': '; '.join(data['emails']),
+                'telegram': '; '.join(data['telegrams']),
+                'linkedin': '; '.join(data['linkedins']),
+                'phone': '; '.join(data['phones']),
+                'subject_area': self._extract_subject_area(data['tags'])
+            })
+        
+        return flat_contacts
+    
+    def _extract_subject_area(self, tags: list) -> str:
+        """Extract subject area from tags"""
+        if not tags or not isinstance(tags, list):
+            return ''
+        
+        # Filter out generic tags and keep only meaningful categories
+        generic_tags = {'b2b', 'company', 'business', 'website'}
+        meaningful_tags = [tag for tag in tags if tag.lower() not in generic_tags]
+        
+        return ', '.join(meaningful_tags[:3])  # Top 3 tags
     
     def export_to_csv(self, filters: dict = None) -> str:
         """Export contacts to CSV format"""

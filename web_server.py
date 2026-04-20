@@ -410,6 +410,31 @@ def api_keywords():
         db.close()
 
 
+@app.route('/api/export/flat-csv')
+def export_flat_csv():
+    """Export contacts to flat CSV with keyword info"""
+    from services.export_service import ExportService
+    
+    db = SessionLocal()
+    try:
+        export_service = ExportService(db)
+        csv_data = export_service.export_to_flat_csv()
+        
+        from flask import Response
+        return Response(
+            csv_data,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': 'attachment; filename=contacts_flat.csv'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Export failed: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
 if __name__ == '__main__':
     # Инициализация базы данных
     init_db()

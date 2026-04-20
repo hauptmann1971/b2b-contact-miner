@@ -49,7 +49,9 @@ class ExportService:
             row_number += 1
         
         logger.info(f"Exported {row_number - 1} contacts to flat CSV")
-        return output.getvalue()
+        
+        # Add BOM for Excel compatibility
+        return '\ufeff' + output.getvalue()
     
     def _query_contacts_with_keyword(self, filters: dict = None) -> List[dict]:
         """Query contacts joined with keyword and search result info"""

@@ -131,8 +131,14 @@ class ContactMiningPipeline:
             # Get queue stats
             stats = await self.task_queue.get_queue_stats()
             
+            # Check if stats is valid (handle DB errors)
+            if not stats:
+                logger.warning("Failed to get queue stats, retrying in 5s...")
+                await asyncio.sleep(5)
+                continue
+            
             # Check if all tasks completed
-            if stats['pending'] == 0 and stats['running'] == 0:
+            if stats.get('pending', 0) == 0 and stats.get('running', 0) == 0:
                 logger.info(f"\n✅ All tasks completed!")
                 logger.info(f"   Total: {stats['total']} tasks")
                 logger.info(f"   Completed: {stats['completed']}")
@@ -141,11 +147,11 @@ class ContactMiningPipeline:
             
             # Log progress every 30 seconds
             logger.info(
-                f"\r📊 Queue: {stats['pending']} pending | "
-                f"{stats['running']} running | "
-                f"{stats['completed']} completed | "
-                f"{stats['failed']} failed | "
-                f"{stats['keywords_in_progress']} keywords in progress"
+                f"📊 Queue Status: {stats.get('pending', 0)} pending | "
+                f"{stats.get('running', 0)} running | "
+                f"{stats.get('completed', 0)} completed | "
+                f"{stats.get('failed', 0)} failed | "
+                f"{stats.get('keywords_in_progress', 0)} keywords in progress"
             )
             
             await asyncio.sleep(30)

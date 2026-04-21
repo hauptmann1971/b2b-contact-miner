@@ -406,3 +406,130 @@ If no contacts found, return:
             score += 10
         
         return min(score, 100)
+    
+    def classify_domain_category(self, content: str, keyword: str = "") -> List[str]:
+        """Classify domain category using LLM
+        Returns list of category tags
+        """
+        # Determine which LLM to use
+        if settings.USE_YANDEXGPT and settings.YANDEX_IAM_TOKEN and settings.YANDEX_FOLDER_ID:
+            llm_type = "yandexgpt"
+        elif settings.USE_GIGACHAT and settings.GIGACHAT_CLIENT_ID and settings.GIGACHAT_CLIENT_SECRET:
+            llm_type = "gigachat"
+        elif settings.USE_DEEPSEEK and settings.DEEPSEEK_API_KEY:
+            llm_type = "deepseek"
+        elif settings.USE_OPENAI and settings.OPENAI_API_KEY:
+            llm_type = "openai"
+        else:
+            return []
+        
+        try:
+            # Simplified prompt for classification only
+            keyword_context = f"\nSearch keyword: {keyword}" if keyword else ""
+            
+            prompt = f"""
+Determine the business category/industry for this website.
+{keyword_context}
+
+Content:
+{content[:3000]}
+
+Return ONLY a JSON array with 1-3 category tags from this list:
+fintech, blockchain, ai, machine-learning, software, saas, ecommerce, marketing, consulting, healthcare, education, real-estate, legal, accounting, hr, logistics, manufacturing, media, entertainment, gaming, cybersecurity, data-analytics, cloud-computing, iot, robotics, biotech, startup, enterprise, b2b, b2c
+
+Example responses:
+["fintech", "startup"]
+["software", "saas", "enterprise"]
+["ecommerce"]
+
+If unclear, return: ["business"]
+            """
+            
+            # Call LLM
+            if llm_type == "yandexgpt":
+                import requests
+                url = f"https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-folder-id": settings.YANDEX_FOLDER_ID,
+                    "Authorization": f"Bearer {settings.YANDEX_IAM_TOKEN}"
+                }
+                payload = {
+                    "modelUri": f"gpt://{settings.YANDEX_FOLDER_ID}/yandexgpt/latest",
+                    "completionOptions": {
+                        "stream": False,
+                        "temperature": 0.1,
+                        "maxTokens": "100"
+                    },
+                    "messages": [{"role": "user", "text": prompt}]
+                }
+                response = requests.post(url, headers=headers, json=payload, timeout=10)
+                response.raise_for_status()
+                result = response.json()
+                content_response = result["result"]["alternatives"][0]["message"]["text"]
+                
+            elif llm_type == "gigachat":
+                from gigachat import GigaChat
+                gc = GigaChat(
+                    credentials=settings.GIGACHAT_CLIENT_ID,
+                    client_secret=settings.GIGACHAT_CLIENT_SECRET,
+                    scope="GIGACHAT_API_PERS"
+                )
+                response = gc.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=100
+                )
+                content_response = response.choices[0].message.content
+                
+            elif llm_type == "deepseek":
+                from openai import OpenAI
+                client = OpenAI(
+                    api_key=settings.DEEPSEEK_API_KEY,
+                    base_url="https://api.deepseek.com/v1"
+                )
+                response = client.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=100
+                )
+                content_response = response.choices[0].message.content
+                
+            else:  # openai
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=100
+                )
+                content_response = response.choices[0].message.content
+            
+            # Parse JSON response
+            import json
+            import re
+            try:
+                categories = json.loads(content_response)
+                if isinstance(categories, list):
+                    logger.info(f"Classified domain categories: {categories}")
+                    return categories[:3]  # Max 3 tags
+            except json.JSONDecodeError:
+                # Try to extract JSON array from response
+                json_match = re.search(r'\[[^\]]*\]', content_response)
+                if json_match:
+                    try:
+                        categories = json.loads(json_match.group(0))
+                        if isinstance(categories, list):
+                            logger.info(f"Classified domain categories (extracted): {categories}")
+                            return categories[:3]
+                    except:
+                        pass
+            
+            logger.warning(f"Failed to parse LLM classification response: {content_response[:200]}")
+            return []
+            
+        except Exception as e:
+            logger.warning(f"LLM classification failed: {e}")
+            return []

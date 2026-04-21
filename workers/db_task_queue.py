@@ -397,6 +397,45 @@ class DatabaseTaskQueue:
             verified_emails = await extractor.batch_verify_emails(contacts.emails)
             logger.info(f"✓ Email verification: {sum(verified_emails.values())}/{len(verified_emails)} valid")
         
+        # Determine tags (hybrid approach: keyword + LLM classification)
+        tags = []
+        try:
+            # 1. Get keyword text as base tag
+            keyword_obj = db.query(Keyword).filter(Keyword.id == keyword_id).first()
+            if keyword_obj:
+                tags.append(keyword_obj.keyword)
+                logger.info(f"Added keyword as tag: {keyword_obj.keyword}")
+            
+            # 2. Use LLM to classify domain category (if enabled)
+            if settings.USE_LLM_EXTRACTION and crawl_data.get("content"):
+                # Combine all page content for classification
+                combined_content = "\n\n".join([
+                    item.get("content", "")[:1000] 
+                    for item in crawl_data["content"][:3]  # First 3 pages
+                ])
+                
+                llm_categories = extractor.classify_domain_category(
+                    combined_content, 
+                    keyword=keyword_obj.keyword if keyword_obj else ""
+                )
+                
+                # Add LLM categories (avoid duplicates)
+                for category in llm_categories:
+                    if category.lower() not in [t.lower() for t in tags]:
+                        tags.append(category)
+                
+                logger.info(f"Final tags for {domain}: {tags}")
+        except Exception as e:
+            logger.warning(f"Failed to determine tags for {domain}: {e}")
+            # Fallback to keyword only
+            if keyword_id:
+                try:
+                    keyword_obj = db.query(Keyword).filter(Keyword.id == keyword_id).first()
+                    if keyword_obj:
+                        tags = [keyword_obj.keyword]
+                except:
+                    pass
+        
         # Save to database
         db = SessionLocal()
         try:
@@ -411,7 +450,7 @@ class DatabaseTaskQueue:
             domain_contact = DomainContact(
                 search_result_id=search_result_id,
                 domain=domain,
-                tags=[],
+                tags=tags,  # ← Hybrid tags: keyword + LLM categories
                 contacts_json=contacts_data,
                 confidence_score=extractor.calculate_confidence(contacts),
                 extraction_method="llm" if settings.USE_LLM_EXTRACTION else "regex"

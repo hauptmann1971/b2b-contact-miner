@@ -110,7 +110,10 @@ class ContactMiningPipeline:
             logger.info(f"\n🎉 Pipeline completed successfully!")
         
         finally:
-            db.close()
+            try:
+                db.close()
+            except Exception as e:
+                logger.warning(f"Non-critical error closing DB session: {e}")
             await self.shutdown()
     
     async def _wait_for_completion(self, keywords: list, timeout_hours: int = 2):

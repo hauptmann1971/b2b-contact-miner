@@ -85,7 +85,15 @@ def export_flat_contacts():
                 # Extract subject area from tags
                 generic_tags = {'b2b', 'company', 'business', 'website'}
                 meaningful_tags = [tag for tag in data['tags'] if isinstance(tag, str) and tag.lower() not in generic_tags]
-                subject_area = ', '.join(meaningful_tags[:3]) if meaningful_tags else ''
+                
+                # If no meaningful tags, use keyword as subject area
+                if meaningful_tags:
+                    subject_area = ', '.join(meaningful_tags[:3])
+                else:
+                    # Fallback to keyword (remove generic words)
+                    keyword_words = keyword.lower().split()
+                    filtered_words = [w for w in keyword_words if w not in generic_tags]
+                    subject_area = keyword if filtered_words else ''
                 
                 writer.writerow([
                     idx,

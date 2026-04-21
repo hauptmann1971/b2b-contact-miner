@@ -30,6 +30,14 @@ class DatabaseTaskQueue:
         self._crawler_service = None
         self._extraction_service = None
     
+    @staticmethod
+    def _safe_close_db(db: Session):
+        """Safely close database session without raising errors"""
+        try:
+            db.close()
+        except Exception as e:
+            logger.debug(f"Non-critical error closing DB session: {e}")
+    
     def _get_serp_service(self):
         """Lazy load SerpService"""
         if self._serp_service is None:
@@ -120,7 +128,7 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to add task to DB: {e}")
             raise
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def _worker(self, worker_id: int):
         """Worker that processes tasks from database"""
@@ -200,7 +208,7 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to fetch task: {e}")
             return None
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def _execute_task(self, task: TaskQueue, worker_name: str):
         """Execute a task based on its type"""
@@ -289,7 +297,7 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to save search results: {e}")
             raise
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def _handle_crawl_task(self, task_id: int, payload: Dict):
         """Handle domain crawling task - creates extract task"""
@@ -361,7 +369,7 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to save crawl data: {e}")
             raise
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def _handle_extract_task(self, task_id: int, payload: Dict):
         """Handle contact extraction - saves final results to DB"""
@@ -507,7 +515,7 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to save contacts for {domain}: {e}")
             raise
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def _handle_task_completion(self, task_id: int, result: Dict):
         """Mark task as completed"""
@@ -524,7 +532,7 @@ class DatabaseTaskQueue:
         except Exception as e:
             logger.error(f"Failed to complete task {task_id}: {e}")
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def _handle_task_failure(self, task_id: int, error_message: str):
         """Handle task failure with retry logic"""
@@ -553,7 +561,7 @@ class DatabaseTaskQueue:
         except Exception as e:
             logger.error(f"Failed to handle task failure {task_id}: {e}")
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def get_queue_stats(self) -> Dict:
         """Get queue statistics with keyword breakdown"""
@@ -581,7 +589,7 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to get queue stats: {e}")
             return {}
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def clear_completed_tasks(self, older_than_days: int = 7):
         """Clear old completed/failed tasks"""
@@ -601,7 +609,7 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to clear old tasks: {e}")
             return 0
         finally:
-            db.close()
+            self._safe_close_db(db)
     
     async def recover_stale_tasks(self):
         """Recover tasks that are stuck in 'running' state (worker crashed)"""
@@ -632,4 +640,4 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to recover stale tasks: {e}")
             return 0
         finally:
-            db.close()
+            self._safe_close_db(db)

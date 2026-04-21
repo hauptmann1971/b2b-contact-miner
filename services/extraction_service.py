@@ -10,8 +10,16 @@ class ExtractionService:
     def __init__(self):
         self.email_pattern = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
         self.mailto_pattern = re.compile(r'href=["\']mailto:([^"\']+)["\']', re.IGNORECASE)
+        
+        # Telegram patterns
         self.telegram_pattern = re.compile(r'(?:https?://)?(?:t\.me|telegram\.me)/([a-zA-Z0-9_]+)')
+        self.telegram_at_pattern = re.compile(r'(?:Telegram|TG|Телеграм)[:\s]*@([a-zA-Z0-9_]{5,})', re.IGNORECASE)
+        self.telegram_join_pattern = re.compile(r'join\.chat/([A-Za-z0-9_-]+)')
+        
+        # LinkedIn patterns
         self.linkedin_pattern = re.compile(r'(?:https?://)?(?:www\.)?linkedin\.com/(?:in|company)/([a-zA-Z0-9_-]+)')
+        self.linkedin_text_pattern = re.compile(r'LinkedIn[:\s]*(?:https?://)?(?:www\.)?linkedin\.com/(?:in|company)/([a-zA-Z0-9_-]+)', re.IGNORECASE)
+        
         self.phone_pattern = re.compile(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}')
         
         self.obfuscation_patterns = [
@@ -57,14 +65,32 @@ class ExtractionService:
             for match in telegram_matches:
                 telegram_links.add(f"https://t.me/{match.group(1)}")
             
+            # Also check for @username mentions after Telegram keyword
+            telegram_at_matches = self.telegram_at_pattern.finditer(content)
+            for match in telegram_at_matches:
+                username = match.group(1)
+                telegram_links.add(f"https://t.me/{username}")
+            
+            # Check for t.me links in href attributes
             telegram_href = re.findall(r'href=["\']([^"\']*t\.me[^"\']*)["\']', content)
             for link in telegram_href:
                 telegram_links.add(link)
+            
+            # Check for join.chat links
+            join_chat_matches = self.telegram_join_pattern.finditer(content)
+            for match in join_chat_matches:
+                telegram_links.add(f"https://join.chat/{match.group(1)}")
             
             linkedin_matches = self.linkedin_pattern.finditer(content)
             for match in linkedin_matches:
                 full_url = f"https://linkedin.com/in/{match.group(1)}" if '/' not in match.group(1) else match.group(0)
                 linkedin_links.add(full_url)
+            
+            # Also check LinkedIn text patterns
+            linkedin_text_matches = self.linkedin_text_pattern.finditer(content)
+            for match in linkedin_text_matches:
+                profile_id = match.group(1)
+                linkedin_links.add(f"https://linkedin.com/in/{profile_id}")
             
             phones = self.phone_pattern.findall(content)
             for phone in phones:
@@ -120,10 +146,16 @@ Extract contact information from the following website content.
 IMPORTANT RULES:
 1. Return ONLY valid JSON, no additional text
 2. Look for obfuscated emails like: name[at]domain.com, name (at) domain (dot) com
-3. Find Telegram links: t.me/username, telegram.me/username, @username
-4. Find LinkedIn profiles: linkedin.com/in/name, linkedin.com/company/name
+3. Find ALL Telegram contacts:
+   - Links: t.me/username, telegram.me/username, join.chat/GROUP
+   - Mentions: "Telegram: @username", "TG: @username", "@username"
+4. Find ALL LinkedIn profiles:
+   - Personal: linkedin.com/in/name
+   - Company: linkedin.com/company/name
+   - Any mention of LinkedIn with URL
 5. Exclude generic emails: noreply@, support@, admin@, webmaster@
 6. Include business emails even if they are info@ or sales@
+7. Look for phone numbers in any format
 
 Content to analyze:
 {combined_content[:4000]}
@@ -131,8 +163,8 @@ Content to analyze:
 Return EXACTLY this JSON format (no extra text before or after):
 {{
   "emails": ["email1@example.com", "email2@example.com"],
-  "telegram": ["https://t.me/username", "@username"],
-  "linkedin": ["https://linkedin.com/in/name"]
+  "telegram": ["https://t.me/username", "@username", "https://join.chat/GROUP"],
+  "linkedin": ["https://linkedin.com/in/name", "https://linkedin.com/company/name"]
 }}
 
 If no contacts found, return:

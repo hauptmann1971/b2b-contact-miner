@@ -115,21 +115,28 @@ class ExtractionService:
             combined_content = "\n\n--- PAGE SEPARATOR ---\n\n".join(obfuscated_contents)
             
             prompt = f"""
-            Extract contact information from website content with obfuscated emails.
-            Look for patterns like: name[at]domain.com, name (at) domain (dot) com, etc.
-            
-            Return ONLY valid business emails, Telegram usernames, and LinkedIn profiles.
-            Exclude: noreply@, support@, admin@, info@, webmaster@
-            
-            Content:
-            {combined_content[:4000]}
-            
-            Return JSON format:
-            {{
-                "emails": ["found@email.com"],
-                "telegram": ["username_or_link"],
-                "linkedin": ["profile_url"]
-            }}
+Extract contact information from the following website content.
+
+IMPORTANT RULES:
+1. Return ONLY valid JSON, no additional text
+2. Look for obfuscated emails like: name[at]domain.com, name (at) domain (dot) com
+3. Find Telegram links: t.me/username, telegram.me/username, @username
+4. Find LinkedIn profiles: linkedin.com/in/name, linkedin.com/company/name
+5. Exclude generic emails: noreply@, support@, admin@, webmaster@
+6. Include business emails even if they are info@ or sales@
+
+Content to analyze:
+{combined_content[:4000]}
+
+Return EXACTLY this JSON format (no extra text before or after):
+{{
+  "emails": ["email1@example.com", "email2@example.com"],
+  "telegram": ["https://t.me/username", "@username"],
+  "linkedin": ["https://linkedin.com/in/name"]
+}}
+
+If no contacts found, return:
+{{"emails": [], "telegram": [], "linkedin": []}}
             """
             
             # Call appropriate LLM
@@ -261,10 +268,27 @@ class ExtractionService:
             import json
             try:
                 extracted = json.loads(content)
+                logger.debug(f"LLM response (first 300 chars): {content[:300]}")
             except json.JSONDecodeError as e:
-                logger.error(f"Invalid JSON from LLM: {e}")
-                logger.debug(f"LLM response: {content[:500]}")
-                return ContactInfo(), None
+                logger.warning(f"Invalid JSON from LLM, attempting to fix: {e}")
+                logger.warning(f"LLM response (first 500 chars): {content[:500]}")
+                
+                # Try to extract JSON from response
+                try:
+                    # Look for JSON object in the response
+                    import re
+                    json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(0)
+                        extracted = json.loads(json_str)
+                        logger.info("Successfully extracted JSON from LLM response")
+                        logger.debug(f"Extracted JSON: {json_str[:200]}")
+                    else:
+                        logger.error("Could not find JSON in LLM response")
+                        return ContactInfo(), None
+                except Exception as fix_error:
+                    logger.error(f"Failed to fix JSON: {fix_error}")
+                    return ContactInfo(), None
             
             # Валидация структуры ответа
             if not isinstance(extracted, dict):

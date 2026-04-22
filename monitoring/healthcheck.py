@@ -214,4 +214,6 @@ def _measure_db_latency() -> float:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # SECURITY: Bind to localhost only (not all interfaces)
+    # Use host='0.0.0.0' only if external access is required with proper firewall rules
+    uvicorn.run(app, host="127.0.0.1", port=8000)

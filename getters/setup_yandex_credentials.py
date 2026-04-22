@@ -122,7 +122,17 @@ if __name__ == "__main__":
     print("YandexGPT Setup - Get IAM Token from API Key")
     print("="*60)
     
-    api_key = "aje59uvsgfu9u518set8"
+    # Get API key from environment variable (SECURITY: never hard-code secrets)
+    import os
+    api_key = os.getenv('YANDEX_API_KEY')
+    
+    if not api_key:
+        print("\n❌ Error: YANDEX_API_KEY environment variable not set!")
+        print("\nSet it with:")
+        print("  export YANDEX_API_KEY=your_api_key_here  # Linux/Mac")
+        print("  set YANDEX_API_KEY=your_api_key_here     # Windows CMD")
+        print("  $env:YANDEX_API_KEY='your_api_key_here'  # PowerShell")
+        exit(1)
     
     print(f"\n1. Using API Key: {api_key[:8]}...")
     

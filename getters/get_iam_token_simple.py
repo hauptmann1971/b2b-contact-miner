@@ -39,9 +39,19 @@ def main():
     print("Get IAM Token from Service Account API Key")
     print("="*60)
     
-    api_key = "aje59uvsgfu9u518set8"
+    # Get API key from environment variable (SECURITY: never hard-code secrets)
+    import os
+    api_key = os.getenv('YANDEX_API_KEY')
     
-    print(f"\nAPI Key: {api_key}")
+    if not api_key:
+        print("\n❌ Error: YANDEX_API_KEY environment variable not set!")
+        print("\nSet it with:")
+        print("  export YANDEX_API_KEY=your_api_key_here  # Linux/Mac")
+        print("  set YANDEX_API_KEY=your_api_key_here     # Windows CMD")
+        print("  $env:YANDEX_API_KEY='your_api_key_here'  # PowerShell")
+        return
+    
+    print(f"\nAPI Key: {api_key[:8]}...")
     print("\nRequesting IAM token from Yandex Cloud...")
     
     iam_token = get_iam_token(api_key)

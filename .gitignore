@@ -64,3 +64,5 @@ htmlcov/
 # Redis dump
 dump.rdb
 sonar.env.txt
+
+.scannerwork/

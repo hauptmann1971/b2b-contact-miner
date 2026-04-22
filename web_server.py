@@ -440,8 +440,10 @@ if __name__ == '__main__':
     init_db()
     
     # Запуск Flask сервера
+    # SECURITY: Bind to localhost only (not all interfaces)
+    # Use host='0.0.0.0' only if external access is required with proper firewall rules
     app.run(
-        host='0.0.0.0',
+        host='127.0.0.1',  # Changed from '0.0.0.0' for security
         port=5000,
         debug=True
     )

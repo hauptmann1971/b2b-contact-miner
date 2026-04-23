@@ -14,6 +14,9 @@ from datetime import datetime, timezone
 from loguru import logger
 from functools import lru_cache
 
+# Database health check query
+DB_HEALTH_CHECK = "SELECT 1"
+
 app = FastAPI(title="Contact Miner Health Check", version="1.0.0")
 
 # Enable CORS for Flask web server
@@ -54,7 +57,7 @@ async def health_check():
     try:
         db_start = datetime.now(timezone.utc)
         db = SessionLocal()
-        db.execute(text("SELECT 1"))
+        db.execute(text(DB_HEALTH_CHECK))
         db.close()
         db_latency = round((datetime.now(timezone.utc) - db_start).total_seconds() * 1000, 2)
         
@@ -149,7 +152,7 @@ async def readiness_check():
     """Kubernetes readiness probe"""
     try:
         db = SessionLocal()
-        db.execute(text("SELECT 1"))
+        db.execute(text(DB_HEALTH_CHECK))
         db.close()
         
         return {"status": "ready", "timestamp": datetime.now(timezone.utc).isoformat()}
@@ -205,7 +208,7 @@ def _measure_db_latency() -> float:
     start = time.time()
     try:
         db = SessionLocal()
-        db.execute(text("SELECT 1"))
+        db.execute(text(DB_HEALTH_CHECK))
         db.close()
     except Exception:
         pass

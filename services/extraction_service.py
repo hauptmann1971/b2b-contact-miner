@@ -5,6 +5,9 @@ from config.settings import settings
 from loguru import logger
 from models.schemas import ContactInfo
 
+# LLM Model constants
+OPENAI_MODEL = "gpt-3.5-turbo"
+
 
 class ExtractionService:
     def __init__(self):
@@ -281,11 +284,11 @@ If no contacts found, return:
                 # Store request data
                 llm_request_data = {
                     "prompt": prompt[:2000],
-                    "model": "gpt-3.5-turbo"
+                    "model": OPENAI_MODEL
                 }
                 
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model=OPENAI_MODEL,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
                     max_tokens=300
@@ -500,7 +503,7 @@ If unclear, return: ["business"]
                 from openai import OpenAI
                 client = OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model=OPENAI_MODEL,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
                     max_tokens=100

@@ -1,6 +1,9 @@
 """Мониторинг воркеров и очереди задач"""
 import asyncio
 from datetime import datetime, timezone
+import sys
+sys.path.insert(0, '..')  # Add parent directory to path
+
 from models.database import SessionLocal
 from models.task_queue import TaskQueue
 from workers.db_task_queue import DatabaseTaskQueue

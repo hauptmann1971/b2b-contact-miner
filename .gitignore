@@ -65,4 +65,9 @@ htmlcov/
 dump.rdb
 sonar.env.txt
 
+# SonarQube/SonarCloud
 .scannerwork/
+
+# Exported data
+*.csv
+contacts_export.csv

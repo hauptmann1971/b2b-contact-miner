@@ -5,7 +5,7 @@ from services.translation_service import TranslationService
 from config.settings import settings
 from loguru import logger
 from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class KeywordService:
@@ -87,7 +87,7 @@ class KeywordService:
         keyword = self.db.query(Keyword).filter(Keyword.id == keyword_id).first()
         if keyword:
             keyword.is_processed = True
-            keyword.last_crawled_at = datetime.utcnow()
+            keyword.last_crawled_at = datetime.now(timezone.utc)
             self.db.commit()
             logger.info(f"Marked keyword {keyword_id} as processed")
     

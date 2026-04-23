@@ -524,7 +524,7 @@ If unclear, return: ["business"]
                         if isinstance(categories, list):
                             logger.info(f"Classified domain categories (extracted): {categories}")
                             return categories[:3]
-                    except:
+                    except Exception:
                         pass
             
             logger.warning(f"Failed to parse LLM classification response: {content_response[:200]}")

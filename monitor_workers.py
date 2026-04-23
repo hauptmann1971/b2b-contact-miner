@@ -93,7 +93,7 @@ async def monitor_workers():
                             print(f"       Keyword: {payload['keyword']}")
                         if 'domain' in payload:
                             print(f"       Domain: {payload['domain']}")
-                    except:
+                    except Exception:
                         pass
         else:
             print("   ℹ️  Нет активных задач")

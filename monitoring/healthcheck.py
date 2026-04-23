@@ -10,7 +10,7 @@ from sqlalchemy import text
 from models.database import SessionLocal, engine
 from workers.db_task_queue import DatabaseTaskQueue
 from config.settings import settings
-from datetime import datetime
+from datetime import datetime, timezone
 from loguru import logger
 from functools import lru_cache
 
@@ -46,17 +46,17 @@ class HealthResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Comprehensive health check endpoint"""
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     
     services_status = {}
     
     # Check database with latency measurement
     try:
-        db_start = datetime.utcnow()
+        db_start = datetime.now(timezone.utc)
         db = SessionLocal()
         db.execute(text("SELECT 1"))
         db.close()
-        db_latency = round((datetime.utcnow() - db_start).total_seconds() * 1000, 2)
+        db_latency = round((datetime.now(timezone.utc) - db_start).total_seconds() * 1000, 2)
         
         services_status["database"] = {
             "status": "healthy",
@@ -137,7 +137,7 @@ async def health_check():
     
     return HealthResponse(
         status="healthy" if all_healthy else "unhealthy",
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         services=services_status,
         queue_size=services_status.get("task_queue", {}).get("pending_tasks", 0),
         uptime_seconds=total_time
@@ -152,7 +152,7 @@ async def readiness_check():
         db.execute(text("SELECT 1"))
         db.close()
         
-        return {"status": "ready", "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "ready", "timestamp": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Not ready: {str(e)}")
 
@@ -160,7 +160,7 @@ async def readiness_check():
 @app.get("/health/live")
 async def liveness_check():
     """Kubernetes liveness probe"""
-    return {"status": "alive", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "alive", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/metrics/pipeline")
@@ -183,7 +183,7 @@ async def pipeline_metrics():
     return {
         "pipeline": stats,
         "queue": queue_stats,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -194,7 +194,7 @@ def _measure_async_latency(func) -> float:
     start = time.time()
     try:
         asyncio.run(func())
-    except:
+    except Exception:
         pass
     return round((time.time() - start) * 1000, 2)
 
@@ -207,7 +207,7 @@ def _measure_db_latency() -> float:
         db = SessionLocal()
         db.execute(text("SELECT 1"))
         db.close()
-    except:
+    except Exception:
         pass
     return round((time.time() - start) * 1000, 2)
 

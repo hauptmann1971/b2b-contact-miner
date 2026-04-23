@@ -1,0 +1,245 @@
+Run SonarSource/sonarcloud-github-action@master 
+Run echo "::warning title=SonarScanner::This action is deprecated and will be removed in a future release. Please use the sonarqube-scan-action action instead. The sonarqube-scan-action is a drop-in replacement for this action." 
+Warning: This action is deprecated and will be removed in a future release. Please use the sonarqube-scan-action action instead. The sonarqube-scan-action is a drop-in replacement for this action. 
+Run SonarSource/sonarqube-scan-action@v5.0.0 
+Run ${GITHUB_ACTION_PATH}/scripts/sanity-checks.sh 
+Run actions/cache@v4 
+Cache not found for input keys: sonar-scanner-cli-7.0.2.4839-Linux-X64 
+Run ${GITHUB_ACTION_PATH}/scripts/install-sonar-scanner-cli.sh 
++ mkdir -p /home/runner/work/_temp/sonarscanner 
++ cd /home/runner/work/_temp/sonarscanner 
++ SCANNER_FILE_NAME=sonar-scanner-cli-7.0.2.4839-linux-x64.zip 
++ SCANNER_URI=https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.0.2.4839-linux-x64.zip 
++ command -v wget 
++ wget --no-verbose --user-agent=sonarqube-scan-action https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.0.2.4839-linux-x64.zip 
+2026-04-22 13:25:06 URL:https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.0.2.4839-linux-x64.zip [57688416/57688416] -> "sonar-scanner-cli-7.0.2.4839-linux-x64.zip" [1] 
++ unzip -q -o sonar-scanner-cli-7.0.2.4839-linux-x64.zip 
++ SCANNER_UNZIP_FOLDER=sonar-scanner-7.0.2.4839-linux-x64 
++ SCANNER_LOCAL_FOLDER=/home/runner/work/_temp/sonar-scanner-cli-7.0.2.4839-Linux-X64 
++ '[' -d /home/runner/work/_temp/sonar-scanner-cli-7.0.2.4839-Linux-X64 ']' 
++ mv -f sonar-scanner-7.0.2.4839-linux-x64 /home/runner/work/_temp/sonar-scanner-cli-7.0.2.4839-Linux-X64 
+Run echo "${RUNNER_TEMP}/sonar-scanner-cli-7.0.2.4839-Linux-X64/bin" >> $GITHUB_PATH 
+Run ${GITHUB_ACTION_PATH}/scripts/run-sonar-scanner-cli.sh 
++ sonar-scanner 
+13:25:07.686 INFO Scanner configuration file: /home/runner/work/_temp/sonar-scanner-cli-7.0.2.4839-Linux-X64/conf/sonar-scanner.properties 
+13:25:07.690 INFO Project root configuration file: /home/runner/work/b2b-contact-miner/b2b-contact-miner/sonar-project.properties 
+13:25:07.705 INFO SonarScanner CLI 7.0.2.4839 
+13:25:07.707 INFO Java 17.0.13 Eclipse Adoptium (64-bit) 
+13:25:07.707 INFO Linux 6.17.0-1010-azure amd64 
+13:25:07.736 INFO User cache: /home/runner/.sonar/cache 
+13:25:08.342 INFO JRE provisioning: os[linux], arch[x86_64] 
+13:25:11.114 INFO Communicating with SonarQube Cloud 
+13:25:11.368 INFO Starting SonarScanner Engine... 
+13:25:11.369 INFO Java 21.0.9 Eclipse Adoptium (64-bit) 
+13:25:12.545 INFO Load global settings 
+13:25:13.266 INFO Load global settings (done) | time=720ms 
+13:25:13.347 INFO Server id: 1BD809FA-AWHW8ct9-T_TB3XqouNu 
+13:25:13.521 INFO Loading required plugins 
+13:25:13.522 INFO Load plugins index 
+13:25:13.676 INFO Load plugins index (done) | time=152ms 
+13:25:13.676 INFO Load/download plugins 
+13:25:14.410 INFO Load/download plugins (done) | time=735ms 
+13:25:14.601 INFO Loaded core extensions: a3s, architecture, sca 
+13:25:14.855 INFO Process project properties 
+13:25:14.876 INFO Project key: hauptmann1971_b2b-contact-miner 
+13:25:14.879 INFO Base dir: /home/runner/work/b2b-contact-miner/b2b-contact-miner 
+13:25:14.880 INFO Working dir: /home/runner/work/b2b-contact-miner/b2b-contact-miner/.scannerwork 
+13:25:14.892 INFO Found an active CI vendor: 'Github Actions' 
+13:25:14.897 INFO Load project branches 
+13:25:15.375 INFO Load project branches (done) | time=478ms 
+13:25:15.381 INFO Load project settings for component key: 'hauptmann1971_b2b-contact-miner' 
+13:25:15.721 INFO Load project settings for component key: 'hauptmann1971_b2b-contact-miner' (done) | time=339ms 
+13:25:16.389 INFO Check ALM binding of project 'hauptmann1971_b2b-contact-miner' 
+13:25:16.597 INFO Detected project binding: BOUND 
+13:25:16.597 INFO Check ALM binding of project 'hauptmann1971_b2b-contact-miner' (done) | time=207ms 
+13:25:16.601 INFO Load project pull requests 
+13:25:16.778 INFO Load project pull requests (done) | time=177ms 
+13:25:16.783 INFO Load branch configuration 
+13:25:16.784 INFO Github event: push 
+13:25:16.789 INFO Auto-configuring branch main 
+13:25:16.789 INFO Load branch configuration (done) | time=6ms 
+13:25:16.799 INFO Load quality profiles 
+13:25:17.241 INFO Load quality profiles (done) | time=441ms 
+13:25:17.256 INFO Create analysis 
+13:25:17.495 INFO Create analysis (done) | time=238ms 
+13:25:17.518 INFO Load active rules 
+13:25:18.480 INFO Load active rules (done) | time=962ms 
+13:25:18.844 INFO Organization key: hauptmann1971 
+13:25:18.844 INFO Branch name: main, type: long-lived 
+13:25:18.865 INFO Preprocessing files... 
+13:25:18.996 INFO 4 languages detected in 71 preprocessed files (done) | time=130ms 
+13:25:18.997 INFO 121 files ignored because of inclusion/exclusion patterns 
+13:25:18.997 INFO 0 files ignored because of scm ignore settings 
+13:25:19.059 INFO Loading plugins for detected languages 
+13:25:19.059 INFO Load/download plugins 
+13:25:20.413 INFO Load/download plugins (done) | time=1353ms 
+13:25:20.732 INFO Load project repositories 
+13:25:21.059 INFO Load project repositories (done) | time=326ms 
+13:25:21.073 INFO Indexing files... 
+13:25:21.073 INFO Project configuration: 
+13:25:21.073 INFO Excluded sources: **/venv/**, **/__pycache__/**, **/tests/**, **/migrations/**, **/*.md, **/doc/**, **/logs/**, **/.git/**, **/build-wrapper-dump.json, **/test_*.py, **/*_test.py 
+13:25:21.073 INFO Included tests: **/test_*.py, **/*_test.py 
+13:25:21.088 INFO 71 files indexed (done) | time=15ms 
+13:25:21.096 INFO Quality profile for py: Sonar way 
+13:25:21.097 INFO Quality profile for shell: Sonar way 
+13:25:21.097 INFO Quality profile for web: Sonar way 
+13:25:21.097 INFO Quality profile for yaml: Sonar way 
+13:25:21.097 INFO ------------- Run sensors on module B2B Contact Miner 
+13:25:21.179 INFO Load metrics repository 
+13:25:21.307 INFO Load metrics repository (done) | time=126ms 
+13:25:21.314 INFO Sensor cache enabled 
+13:25:21.319 INFO Load sensor cache 
+13:25:22.829 INFO Load sensor cache (769 KB) | time=1507ms 
+13:25:23.966 INFO Reflections took 57 ms to scan 1 urls, producing 25 keys and 261 values 
+13:25:24.177 INFO Sensor Python Sensor [python] 
+13:25:24.357 INFO Starting global symbols computation 
+13:25:24.359 INFO 49 source files to be analyzed 
+13:25:25.856 INFO 49/49 source files have been analyzed 
+13:25:25.857 INFO Finished step global symbols computation in 1499ms 
+13:25:25.912 INFO Starting rules execution 
+13:25:25.912 INFO 49 source files to be analyzed 
+13:25:31.637 INFO 49/49 source files have been analyzed 
+13:25:31.639 INFO Finished step rules execution in 5727ms 
+13:25:31.640 INFO The Python analyzer was able to leverage cached data from previous analyses for 0 out of 49 files. These files were not parsed. 
+13:25:31.640 INFO Sensor Python Sensor [python] (done) | time=7464ms 
+13:25:31.641 INFO Sensor Cobertura Sensor for Python coverage [python] 
+13:25:31.749 WARN No report was found for sonar.python.coverage.reportPaths using pattern coverage.xml 
+13:25:31.749 INFO Sensor Cobertura Sensor for Python coverage [python] (done) | time=109ms 
+13:25:31.750 INFO Sensor PythonXUnitSensor [python] 
+13:25:31.847 WARN No report was found for sonar.python.xunit.reportPath using pattern test-results.xml 
+13:25:31.848 INFO Sensor PythonXUnitSensor [python] (done) | time=95ms 
+13:25:31.848 INFO Sensor Python Dependency Sensor [python] 
+13:25:31.852 INFO Sensor Python Dependency Sensor [python] (done) | time=5ms 
+13:25:31.853 INFO Sensor IaC hadolint report Sensor [iac] 
+13:25:31.854 INFO Sensor IaC hadolint report Sensor [iac] (done) | time=0ms 
+13:25:31.854 INFO Sensor Java Config Sensor [iac] 
+13:25:31.860 INFO There are no files to be analyzed for the Java language 
+13:25:31.860 INFO Sensor Java Config Sensor [iac] (done) | time=6ms 
+13:25:31.860 INFO Sensor IaC Docker Sensor [iac] 
+13:25:31.862 INFO There are no files to be analyzed for the Docker language 
+13:25:31.864 INFO Sensor IaC Docker Sensor [iac] (done) | time=2ms 
+13:25:31.864 INFO Sensor IaC GitHub Actions Sensor [iac] 
+13:25:31.882 INFO 1 source file to be analyzed 
+13:25:31.966 INFO 1/1 source file has been analyzed 
+13:25:31.967 INFO Sensor IaC GitHub Actions Sensor [iac] (done) | time=104ms 
+13:25:31.967 INFO Sensor IaC actionlint report Sensor [iac] 
+13:25:31.967 INFO Sensor IaC actionlint report Sensor [iac] (done) | time=0ms 
+13:25:31.968 INFO Sensor IaC Shell Sensor [iac] 
+13:25:31.969 INFO 2 source files to be analyzed 
+13:25:32.126 INFO 2/2 source files have been analyzed 
+13:25:32.126 INFO Sensor IaC Shell Sensor [iac] (done) | time=158ms 
+13:25:32.127 INFO Sensor JavaScript/TypeScript/CSS analysis [javascript] 
+13:25:32.365 INFO Detected os: Linux arch: amd64 alpine: false. Platform: LINUX_X64 
+13:25:32.366 INFO Deploy location /home/runner/.sonar/js/node-runtime, tagetRuntime: /home/runner/.sonar/js/node-runtime/node, version: /home/runner/.sonar/js/node-runtime/version.txt 
+13:25:35.242 INFO Using embedded Node.js runtime. 
+13:25:35.242 INFO Using Node.js executable: '/home/runner/.sonar/js/node-runtime/node'. 
+13:25:37.065 INFO Memory configuration: OS (15989 MB), Node.js (4288 MB). 
+13:25:37.146 INFO WebSocket client connected on /ws 
+13:25:37.148 INFO Plugin version: [12.3.0.39932] 
+13:25:38.886 INFO Found 0 tsconfig.json file(s): [] 
+13:25:39.428 INFO 7 source files to be analyzed 
+13:25:39.428 INFO 7/7 source files have been analyzed 
+13:25:39.442 INFO JasminAstConsumer done 
+13:25:39.442 INFO Hit the cache for 0 out of 7 
+13:25:39.442 INFO Miss the cache for 7 out of 7: ANALYSIS_MODE_INELIGIBLE [7/7] 
+13:25:39.443 INFO Sensor JavaScript/TypeScript/CSS analysis [javascript] (done) | time=7316ms 
+13:25:39.443 INFO Sensor SecurityPythonTelemetrySensor [securitypythonfrontend] 
+13:25:39.444 INFO Sensor SecurityPythonTelemetrySensor [securitypythonfrontend] (done) | time=1ms 
+13:25:39.445 INFO Sensor Python HTML templates processing [securitypythonfrontend] 
+13:25:39.490 INFO Sensor Python HTML templates processing [securitypythonfrontend] (done) | time=44ms 
+13:25:39.491 INFO Sensor HTML [web] 
+13:25:39.771 INFO Sensor HTML [web] (done) | time=280ms 
+13:25:39.773 INFO Sensor Deterministic Rule Engine for Shell [dre] 
+13:25:39.775 INFO Extracting bridge from /bridge/bridge-linux-x64.xz 
+13:25:40.168 INFO Bridge extracted to /home/runner/work/b2b-contact-miner/b2b-contact-miner/.scannerwork/.sonartmp/bridge/bridge 
+13:25:40.191 INFO Sensor Deterministic Rule Engine for Shell [dre] (done) | time=420ms 
+13:25:40.192 INFO Sensor javabugs [dbd] 
+13:25:40.196 INFO No IR files have been included for analysis. 
+13:25:40.197 INFO Sensor javabugs [dbd] (done) | time=5ms 
+13:25:40.199 INFO Sensor pythonbugs [dbd] 
+13:25:40.261 INFO Analyzing 111/131 functions to detect bugs. 
+13:25:41.049 INFO Sensor pythonbugs [dbd] (done) | time=851ms 
+13:25:41.049 INFO Sensor EnterpriseTextAndSecretsSensor [textenterprise] 
+13:25:41.061 INFO Available processors: 4 
+13:25:41.061 INFO Using 4 threads for analysis. 
+13:25:41.446 INFO Start fetching files for the text and secrets analysis 
+13:25:41.454 INFO Using Git CLI to retrieve dirty files 
+13:25:41.466 INFO Retrieving language associated files and files included via "sonar.text.inclusions" that are tracked by git 
+13:25:41.469 INFO Starting the text and secrets analysis 
+13:25:41.470 INFO 66 source files to be analyzed for the text and secrets analysis 
+13:25:41.808 INFO 66/66 source files have been analyzed for the text and secrets analysis 
+13:25:41.809 INFO Start fetching files for the binary file analysis 
+13:25:41.811 INFO There are no files to be analyzed for the binary file analysis 
+13:25:41.813 INFO Sensor EnterpriseTextAndSecretsSensor [textenterprise] (done) | time=762ms 
+13:25:41.813 INFO Sensor PythonSecuritySensor [security] 
+13:25:41.818 INFO 25 taint analysis rules enabled. 
+13:25:42.583 INFO Analyzing 8355 UCFGs to detect vulnerabilities. 
+13:25:43.440 INFO All rules entry points : 14 
+13:25:43.442 INFO Retained UCFGs : 206 
+13:25:43.518 INFO 0 / 206 UCFGs simulated, memory usage: 1527 MB 
+13:25:44.040 INFO 169 / 206 UCFGs simulated, memory usage: 1578 MB 
+13:25:44.066 INFO python security sensor: Begin: 2026-04-22T13:25:41.815419828Z, End: 2026-04-22T13:25:44.063003341Z, Duration: 00:00:02.247 
+Load type hierarchy and UCFGs: Begin: 2026-04-22T13:25:41.819128758Z, End: 2026-04-22T13:25:42.582587052Z, Duration: 00:00:00.763 
+Load type hierarchy: Begin: 2026-04-22T13:25:41.819147166Z, End: 2026-04-22T13:25:41.978345049Z, Duration: 00:00:00.159 
+Load UCFGs: Begin: 2026-04-22T13:25:41.978544881Z, End: 2026-04-22T13:25:42.582511678Z, Duration: 00:00:00.603 
+Check cache: Begin: 2026-04-22T13:25:42.582710568Z, End: 2026-04-22T13:25:42.583374248Z, Duration: 00:00:00.000 
+Load cache: Begin: 2026-04-22T13:25:42.583093605Z, End: 2026-04-22T13:25:42.583117031Z, Duration: 00:00:00.000 
+Create runtime call graph: Begin: 2026-04-22T13:25:42.583409662Z, End: 2026-04-22T13:25:43.004388018Z, Duration: 00:00:00.420 
+Variable Type Analysis #1: Begin: 2026-04-22T13:25:42.583897878Z, End: 2026-04-22T13:25:42.841592231Z, Duration: 00:00:00.257 
+Create runtime type propagation graph: Begin: 2026-04-22T13:25:42.584628920Z, End: 2026-04-22T13:25:42.701081304Z, Duration: 00:00:00.116 
+Run SCC (Tarjan) on 22567 nodes: Begin: 2026-04-22T13:25:42.701418883Z, End: 2026-04-22T13:25:42.739174080Z, Duration: 00:00:00.037 
+Propagate runtime types to strongly connected components: Begin: 2026-04-22T13:25:42.739297466Z, End: 2026-04-22T13:25:42.841493543Z, Duration: 00:00:00.102 
+Variable Type Analysis #2: Begin: 2026-04-22T13:25:42.847147064Z, End: 2026-04-22T13:25:42.997401467Z, Duration: 00:00:00.150 
+Create runtime type propagation graph: Begin: 2026-04-22T13:25:42.847154645Z, End: 2026-04-22T13:25:42.916451905Z, Duration: 00:00:00.069 
+Run SCC (Tarjan) on 21584 nodes: Begin: 2026-04-22T13:25:42.916537934Z, End: 2026-04-22T13:25:42.944769317Z, Duration: 00:00:00.028 
+Propagate runtime types to strongly connected components: Begin: 2026-04-22T13:25:42.944876708Z, End: 2026-04-22T13:25:42.997292112Z, Duration: 00:00:00.052 
+Load config: Begin: 2026-04-22T13:25:43.004439115Z, End: 2026-04-22T13:25:43.316110356Z, Duration: 00:00:00.311 
+Compute entry points: Begin: 2026-04-22T13:25:43.316175344Z, End: 2026-04-22T13:25:43.440066110Z, Duration: 00:00:00.123 
+Slice call graph: Begin: 2026-04-22T13:25:43.440268055Z, End: 2026-04-22T13:25:43.447509910Z, Duration: 00:00:00.007 
+Live variable analysis: Begin: 2026-04-22T13:25:43.447584032Z, End: 2026-04-22T13:25:43.509462088Z, Duration: 00:00:00.061 
+Taint analysis for python: Begin: 2026-04-22T13:25:43.509672045Z, End: 2026-04-22T13:25:44.040970252Z, Duration: 00:00:00.531 
+Report issues: Begin: 2026-04-22T13:25:44.041030753Z, End: 2026-04-22T13:25:44.043928Z, Duration: 00:00:00.002 
+Store cache: Begin: 2026-04-22T13:25:44.048449305Z, End: 2026-04-22T13:25:44.061637332Z, Duration: 00:00:00.013 
+13:25:44.067 INFO python security sensor peak memory: 1584 MB 
+13:25:44.067 INFO Sensor PythonSecuritySensor [security] (done) | time=2254ms 
+13:25:44.077 INFO ------------- Run sensors on project 
+13:25:44.198 INFO Sensor PythonArchitectureSensor [architecture] 
+13:25:44.290 INFO Found 1 potential Udg file location(s) for "py" in "/home/runner/work/b2b-contact-miner/b2b-contact-miner/.scannerwork" 
+13:25:44.291 INFO - /home/runner/work/b2b-contact-miner/b2b-contact-miner/.scannerwork/architecture/py 
+13:25:44.331 INFO Architecture analysis is enabled with the following features: legacy, discovery, flaws, smells, deviations, directives 
+13:25:44.336 INFO * Protobuf reading starting | memory total=1788 | free=1309 | used=478 (MB) 
+13:25:44.336 INFO * Reading SonarArchitecture UDG data from directory "/home/runner/work/b2b-contact-miner/b2b-contact-miner/.scannerwork/architecture/py" 
+13:25:44.481 INFO * Files successfully loaded: "49" out of "49" 
+13:25:44.481 INFO * Purging externals (components not scanned) from graphs 
+13:25:44.488 INFO * Purging excluded nodes from graphs 
+13:25:44.501 INFO * Protobuf reading complete | memory total=1788 | free=1293 | used=494 (MB) 
+13:25:44.534 INFO * Build architecture.graph.py.file_graph.default_perspective hierarchy graph complete (filtered=false) | memory total=1788 | free=1288 | used=499 (MB) 
+13:25:44.574 INFO No directives configured 
+13:25:44.580 INFO * No intended architecture defined or detected, using an empty model 
+13:25:44.826 INFO Sensor PythonArchitectureSensor [architecture] (done) | time=629ms 
+13:25:44.830 INFO Sensor Zero Coverage Sensor 
+13:25:44.866 INFO Sensor Zero Coverage Sensor (done) | time=39ms 
+13:25:44.867 INFO Sensor Architecture Telemetry [architecture] 
+13:25:44.867 INFO Sensor Architecture Telemetry [architecture] (done) | time=0ms 
+13:25:45.095 INFO ------------- Gather SCA dependencies on project 
+13:25:45.566 INFO Dependency analysis skipped 
+13:25:45.581 INFO CPD Executor 4 files had no CPD blocks 
+13:25:45.582 INFO CPD Executor Calculating CPD for 46 files 
+13:25:45.632 INFO CPD Executor CPD calculation finished (done) | time=49ms 
+13:25:45.635 INFO SCM Publisher SCM provider for this project is: git 
+13:25:45.635 INFO SCM Publisher 55 source files to be analyzed 
+13:25:46.112 INFO SCM Publisher 55/55 source files have been analyzed (done) | time=474ms 
+13:25:46.123 INFO SCM revision ID '3631ef709316ab322f26c338584c75cf7040f063' 
+13:25:48.525 INFO Analysis report generated in 2402ms, dir size=1 MB 
+13:25:48.667 INFO Analysis report compressed in 142ms, zip size=356 KB 
+13:25:49.601 INFO Analysis report uploaded in 934ms 
+13:25:51.234 INFO Successfully sent architecture data 
+13:25:51.235 INFO ------------- Upload SCA dependency files 
+13:25:52.347 INFO Sensor cache published successfully 
+13:25:52.348 INFO ------------- Check Quality Gate status 
+13:25:52.348 INFO Waiting for the analysis report to be processed (max 300s) 
+13:25:58.268 ERROR QUALITY GATE STATUS: FAILED - View details on https://sonarcloud.io/dashboard?id=hauptmann1971_b2b-contact-miner&branch=main 
+13:25:58.619 INFO EXECUTION FAILURE 
+13:25:58.621 INFO Total time: 50.937s 
+Error: Process completed with exit code 3.
+     

@@ -1,4 +1,7 @@
 """Check what contacts are actually in the database"""
+import sys
+sys.path.insert(0, '..')  # Add parent directory to path
+
 from models.database import SessionLocal, Contact, ContactType, DomainContact, Keyword, SearchResult
 from sqlalchemy import func
 

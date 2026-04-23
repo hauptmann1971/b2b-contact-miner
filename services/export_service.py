@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from models.database import DomainContact, Contact, ContactType, Keyword, SearchResult
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import csv
 import io
 from loguru import logger
@@ -270,7 +270,7 @@ class ExportService:
                     try:
                         if len(str(cell.value)) > max_length:
                             max_length = len(str(cell.value))
-                    except:
+                    except Exception:
                         pass
                 adjusted_width = min(max_length + 2, 50)
                 ws.column_dimensions[column_letter].width = adjusted_width
@@ -327,5 +327,5 @@ class ExportService:
             "total_telegram": total_telegram,
             "total_linkedin": total_linkedin,
             "total_contacts": total_emails + total_telegram + total_linkedin,
-            "export_generated_at": datetime.utcnow().isoformat()
+            "export_generated_at": datetime.now(timezone.utc).isoformat()
         }

@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from sqlalchemy import func, desc, text
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 import sys
 import os
 import secrets
@@ -333,7 +333,7 @@ def health_check():
     
     return {
         'status': 'healthy' if status_code == 200 else 'degraded',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'database': db_status,
         'web_server': 'running',
         'monitoring_service': 'not_available'
@@ -345,7 +345,7 @@ def liveness_check():
     """Проверка живости приложения"""
     return {
         'status': 'alive',
-        'timestamp': datetime.utcnow().isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat()
     }, 200
 
 
@@ -359,12 +359,12 @@ def readiness_check():
         db.close()
         return {
             'status': 'ready',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }, 200
     except Exception as e:
         return {
             'status': 'not_ready',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'error': str(e)
         }, 503
 

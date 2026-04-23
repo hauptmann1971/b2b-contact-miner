@@ -293,7 +293,7 @@ class CrawlerService:
                 len(parsed.path) > 1 and
                 not any(parsed.path.endswith(ext) for ext in ['.pdf', '.jpg', '.png', '.zip', '.mp4', '.doc'])
             )
-        except:
+        except Exception:
             return False
     
     async def crawl_contact_pages(self, base_url: str, contact_page_paths: List[str]) -> Dict:

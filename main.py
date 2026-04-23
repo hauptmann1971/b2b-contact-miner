@@ -218,7 +218,7 @@ class ContactMiningPipeline:
             # Mark as failed but don't crash the pipeline
             try:
                 self.state_manager.mark_failed(keyword.id, str(e))
-            except:
+            except Exception:
                 pass
             
             # Return partial results
@@ -264,7 +264,7 @@ class ContactMiningPipeline:
                     # Try to recreate DB session
                     try:
                         db.close()
-                    except:
+                    except Exception:
                         pass
                     db = SessionLocal()
                     

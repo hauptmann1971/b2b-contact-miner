@@ -444,7 +444,7 @@ class DatabaseTaskQueue:
                         keyword_obj = db.query(Keyword).filter(Keyword.id == keyword_id).first()
                         if keyword_obj:
                             tags = [keyword_obj.keyword]
-                    except:
+                    except Exception:
                         pass
             
             # Create DomainContact with JSON

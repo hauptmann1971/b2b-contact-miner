@@ -1,6 +1,6 @@
 from models.database import PipelineState, SessionLocal
 from loguru import logger
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -15,7 +15,7 @@ class StateManager:
             state = PipelineState(
                 run_id=self.run_id,
                 status="started",
-                started_at=datetime.utcnow()
+                started_at=datetime.now(timezone.utc)
             )
             db.add(state)
             db.commit()
@@ -50,7 +50,7 @@ class StateManager:
                 state.websites_processed = websites_processed
                 state.contacts_found = contacts_found
                 state.progress_percent = progress
-                state.updated_at = datetime.utcnow()
+                state.updated_at = datetime.now(timezone.utc)
             
             db.commit()
             logger.info(f"Progress: {progress}% | Websites: {websites_processed} | Contacts: {contacts_found}")
@@ -72,7 +72,7 @@ class StateManager:
                 state.status = "completed"
                 state.contacts_found = contacts_found
                 state.progress_percent = 100
-                state.updated_at = datetime.utcnow()
+                state.updated_at = datetime.now(timezone.utc)
                 db.commit()
         finally:
             db.close()
@@ -89,7 +89,7 @@ class StateManager:
             if state:
                 state.status = "failed"
                 state.error_message = error
-                state.updated_at = datetime.utcnow()
+                state.updated_at = datetime.now(timezone.utc)
                 db.commit()
         finally:
             db.close()

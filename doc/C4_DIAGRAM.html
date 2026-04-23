@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B2B Contact Miner - C4 Architecture</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #1168bd;
+            text-align: center;
+            border-bottom: 3px solid #1168bd;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #08427b;
+            margin-top: 40px;
+        }
+        .diagram-container {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .level-badge {
+            display: inline-block;
+            background: #1168bd;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #1168bd;
+            color: white;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .component-box {
+            border: 2px solid #1168bd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #e3f2fd;
+        }
+        .external-box {
+            border: 2px solid #08427b;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #bbdefb;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🏗️ B2B Contact Miner - C4 Architecture</h1>
+    
+    <div class="diagram-container">
+        <span class="level-badge">Level 1</span>
+        <h2>System Context Diagram</h2>
+        <p><strong>Purpose:</strong> Shows how the system fits into the world and interacts with users and external systems.</p>
+        
+        <div style="text-align: center; padding: 40px;">
+            <div style="display: inline-block; margin: 20px;">
+                <div class="external-box" style="min-width: 200px;">
+                    <h3>👤 User</h3>
+                    <p>Business Analyst</p>
+                </div>
+            </div>
+            
+            <div style="display: inline-block; margin: 20px; font-size: 24px;">→</div>
+            
+            <div style="display: inline-block; margin: 20px;">
+                <div class="component-box" style="min-width: 300px; background: #1168bd; color: white;">
+                    <h3>🔍 B2B Contact Miner</h3>
+                    <p>Automated contact discovery system</p>
+                </div>
+            </div>
+            
+            <div style="display: inline-block; margin: 20px; font-size: 24px;">→</div>
+            
+            <div style="display: inline-block; margin: 10px;">
+                <div class="external-box" style="min-width: 150px;">
+                    <h4>SERP API</h4>
+                    <p>Yandex/Google</p>
+                </div>
+            </div>
+            <div style="display: inline-block; margin: 10px;">
+                <div class="external-box" style="min-width: 150px;">
+                    <h4>Websites</h4>
+                    <p>Target sites</p>
+                </div>
+            </div>
+            <div style="display: inline-block; margin: 10px;">
+                <div class="external-box" style="min-width: 150px;">
+                    <h4>LLM Service</h4>
+                    <p>YandexGPT/GigaChat</p>
+                </div>
+            </div>
+            <div style="display: inline-block; margin: 10px;">
+                <div class="external-box" style="min-width: 150px;">
+                    <h4>MySQL DB</h4>
+                    <p>Data storage</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="diagram-container">
+        <span class="level-badge">Level 2</span>
+        <h2>Container Diagram</h2>
+        <p><strong>Purpose:</strong> Shows the high-level technology choices and how containers communicate.</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Container</th>
+                    <th>Technology</th>
+                    <th>Responsibility</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Nginx</strong></td>
+                    <td>Nginx 1.24</td>
+                    <td>Reverse proxy, security headers, SSL termination</td>
+                </tr>
+                <tr>
+                    <td><strong>Flask Web Server</strong></td>
+                    <td>Python + Flask</td>
+                    <td>User interface for viewing and managing contacts</td>
+                </tr>
+                <tr>
+                    <td><strong>FastAPI Monitoring</strong></td>
+                    <td>Python + FastAPI</td>
+                    <td>Health checks, metrics, monitoring API</td>
+                </tr>
+                <tr>
+                    <td><strong>Main Pipeline</strong></td>
+                    <td>Python + Playwright</td>
+                    <td>Core orchestrator: search → crawl → extract</td>
+                </tr>
+                <tr>
+                    <td><strong>Task Queue Worker</strong></td>
+                    <td>Python + SQLAlchemy</td>
+                    <td>Async task processing with retry logic</td>
+                </tr>
+                <tr>
+                    <td><strong>MySQL Database</strong></td>
+                    <td>MySQL 8.x (Remote)</td>
+                    <td>Persistent storage for all data</td>
+                </tr>
+                <tr>
+                    <td><strong>Redis Cache</strong></td>
+                    <td>Redis 7.x (Local)</td>
+                    <td>Caching, rate limiting, session storage</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="diagram-container">
+        <span class="level-badge">Level 3</span>
+        <h2>Component Diagram - Main Pipeline</h2>
+        <p><strong>Purpose:</strong> Shows how the main pipeline is broken down into components.</p>
+        
+        <div class="component-box">
+            <h3>📥 Input Layer</h3>
+            <ul>
+                <li><code>Keyword Loader</code> - Loads keywords from database</li>
+                <li><code>State Manager</code> - Tracks pipeline progress</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; font-size: 24px; margin: 10px;">↓</div>
+        
+        <div class="component-box">
+            <h3>🔍 Search Layer</h3>
+            <ul>
+                <li><code>Search Orchestrator</code> - Coordinates search workflow</li>
+                <li><code>SERP Getter</code> - Fetches results from SERP API</li>
+                <li><code>Result Processor</code> - Parses and validates results</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; font-size: 24px; margin: 10px;">↓</div>
+        
+        <div class="component-box">
+            <h3>🕷️ Crawl Layer</h3>
+            <ul>
+                <li><code>Domain Crawler</code> - Crawls websites with Playwright</li>
+                <li><code>Content Extractor</code> - Extracts HTML content</li>
+                <li><code>Rate Limiter</code> - Prevents overwhelming servers</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; font-size: 24px; margin: 10px;">↓</div>
+        
+        <div class="component-box">
+            <h3>🤖 AI Extraction Layer</h3>
+            <ul>
+                <li><code>LLM Caller</code> - Calls YandexGPT/GigaChat</li>
+                <li><code>Contact Parser</code> - Parses LLM JSON response</li>
+                <li><code>Validation</code> - Validates extracted contacts</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; font-size: 24px; margin: 10px;">↓</div>
+        
+        <div class="component-box">
+            <h3>💾 Storage Layer</h3>
+            <ul>
+                <li><code>Result Saver</code> - Saves to database</li>
+                <li><code>Export Service</code> - Exports to CSV/Excel</li>
+                <li><code>Task Queue Writer</code> - Creates async tasks</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="diagram-container">
+        <span class="level-badge">Database</span>
+        <h2>Database Schema Overview</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Table</th>
+                    <th>Records</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>keywords</code></td>
+                    <td>~100s</td>
+                    <td>Search queries to process</td>
+                </tr>
+                <tr>
+                    <td><code>search_results</code></td>
+                    <td>~1000s</td>
+                    <td>SERP results for each keyword</td>
+                </tr>
+                <tr>
+                    <td><code>domain_contacts</code></td>
+                    <td>~1000s</td>
+                    <td>Aggregated domain information</td>
+                </tr>
+                <tr>
+                    <td><code>contacts</code></td>
+                    <td>~10,000s</td>
+                    <td>Individual contact records</td>
+                </tr>
+                <tr>
+                    <td><code>crawl_logs</code></td>
+                    <td>~10,000s</td>
+                    <td>Crawling operation logs</td>
+                </tr>
+                <tr>
+                    <td><code>pipeline_state</code></td>
+                    <td>~100s</td>
+                    <td>Pipeline run tracking</td>
+                </tr>
+                <tr>
+                    <td><code>task_queue</code></td>
+                    <td>~1000s</td>
+                    <td>Async task queue</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="diagram-container">
+        <span class="level-badge">Deployment</span>
+        <h2>Deployment Architecture</h2>
+        
+        <div style="display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap;">
+            <div class="external-box" style="flex: 1; min-width: 250px; margin: 10px;">
+                <h3>💻 Developer Machine</h3>
+                <ul>
+                    <li>Development code</li>
+                    <li>Git repository</li>
+                    <li>Testing environment</li>
+                </ul>
+            </div>
+            
+            <div style="font-size: 32px;">→</div>
+            
+            <div class="external-box" style="flex: 1; min-width: 250px; margin: 10px;">
+                <h3>☁️ GitHub + SonarCloud</h3>
+                <ul>
+                    <li>Code repository</li>
+                    <li>CI/CD pipeline</li>
+                    <li>Quality analysis</li>
+                </ul>
+            </div>
+            
+            <div style="font-size: 32px;">→</div>
+            
+            <div class="component-box" style="flex: 1; min-width: 250px; margin: 10px; background: #1168bd; color: white;">
+                <h3>🖥️ Production Server</h3>
+                <p>85.198.86.237</p>
+                <ul style="color: white;">
+                    <li>Nginx (Port 80)</li>
+                    <li>Flask (Port 5000)</li>
+                    <li>FastAPI (Port 8000)</li>
+                    <li>Supervisor</li>
+                </ul>
+            </div>
+            
+            <div style="font-size: 32px;">→</div>
+            
+            <div class="external-box" style="flex: 1; min-width: 250px; margin: 10px;">
+                <h3>🗄️ Remote MySQL</h3>
+                <p>kalmyk3j.beget.tech</p>
+                <ul>
+                    <li>Primary database</li>
+                    <li>All application data</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="diagram-container">
+        <h2>🛠️ Technology Stack</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Technology</th>
+                    <th>Version</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Backend Framework</strong></td>
+                    <td>Flask + FastAPI</td>
+                    <td>3.x + 0.x</td>
+                </tr>
+                <tr>
+                    <td><strong>Database</strong></td>
+                    <td>MySQL</td>
+                    <td>8.x</td>
+                </tr>
+                <tr>
+                    <td><strong>Cache</strong></td>
+                    <td>Redis</td>
+                    <td>7.x</td>
+                </tr>
+                <tr>
+                    <td><strong>Browser Automation</strong></td>
+                    <td>Playwright</td>
+                    <td>Latest</td>
+                </tr>
+                <tr>
+                    <td><strong>AI/ML</strong></td>
+                    <td>YandexGPT, GigaChat</td>
+                    <td>API</td>
+                </tr>
+                <tr>
+                    <td><strong>Web Server</strong></td>
+                    <td>Nginx</td>
+                    <td>1.24</td>
+                </tr>
+                <tr>
+                    <td><strong>Process Manager</strong></td>
+                    <td>Supervisor</td>
+                    <td>4.x</td>
+                </tr>
+                <tr>
+                    <td><strong>CI/CD</strong></td>
+                    <td>GitHub Actions</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><strong>Code Quality</strong></td>
+                    <td>SonarCloud</td>
+                    <td>SaaS</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <footer style="text-align: center; margin-top: 40px; padding: 20px; color: #666;">
+        <p>Generated on 2026-04-23 | B2B Contact Miner Project</p>
+        <p>For detailed diagrams, see <a href="C4_ARCHITECTURE.md">C4_ARCHITECTURE.md</a></p>
+    </footer>
+</body>
+</html>

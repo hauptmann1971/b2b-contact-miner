@@ -99,6 +99,9 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = "text"  # "text" or "json"
     LOG_LEVEL: str = "INFO"  # "DEBUG", "INFO", "WARNING", "ERROR"
     
+    # SonarCloud
+    SONAR_TOKEN: Optional[str] = None  # For API access to SonarCloud reports
+    
     class Config:
         env_file = ".env"
 

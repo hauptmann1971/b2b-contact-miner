@@ -168,6 +168,7 @@ class DatabaseTaskQueue:
     
     async def _fetch_next_task(self, worker_name: str) -> Optional[TaskQueue]:
         """Fetch next pending task and lock it (respects dependencies)"""
+        db = None
         try:
             db = SessionLocal()
             
@@ -193,15 +194,25 @@ class DatabaseTaskQueue:
                         # Parent not completed yet, skip this task
                         continue
                 
-                # Lock the task
-                task.status = 'running'
-                task.locked_by = worker_name
-                task.locked_at = now
-                task.started_at = now
+                # Atomically claim the task to avoid multiple workers taking the same row.
+                claimed_rows = db.query(TaskQueue).filter(
+                    TaskQueue.id == task.id,
+                    TaskQueue.status == 'pending'
+                ).update({
+                    TaskQueue.status: 'running',
+                    TaskQueue.locked_by: worker_name,
+                    TaskQueue.locked_at: now,
+                    TaskQueue.started_at: now
+                }, synchronize_session=False)
+
+                if claimed_rows != 1:
+                    db.rollback()
+                    continue
+
                 db.commit()
-                db.refresh(task)
+                locked_task = db.query(TaskQueue).filter(TaskQueue.id == task.id).first()
                 logger.debug(f"Worker {worker_name} locked task {task.id} ({task.task_type})")
-                return task
+                return locked_task
             
             return None
         except Exception as e:

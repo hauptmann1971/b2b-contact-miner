@@ -36,7 +36,7 @@ class SerpService:
         else:
             raise ValueError(f"Unsupported SERP provider: {self.provider}")
     
-    def _serpapi_search(self, query: str, country: str, language: str, num_results: int) -> List[Dict]:
+    def _serpapi_search(self, query: str, country: str, language: str, num_results: int) -> tuple:
         """Search using SerpAPI"""
         url = "https://serpapi.com/search"
         params = {
@@ -63,8 +63,17 @@ class SerpService:
                     "position": idx + 1
                 })
         
+        raw_response = {
+            "provider": self.provider,
+            "query": query,
+            "country": country,
+            "language": language,
+            "max_results": num_results,
+            "results_count": len(results),
+            "raw_data": data
+        }
         logger.info(f"SerpAPI search returned {len(results)} results for '{query}'")
-        return results
+        return results, raw_response
     
     def _duckduckgo_search(self, query: str, country: str, language: str, num_results: int) -> List[Dict]:
         """Search using DuckDuckGo (free, no API key required)"""

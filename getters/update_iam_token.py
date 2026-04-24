@@ -2,6 +2,7 @@
 Quick script to get new IAM token and update .env
 """
 import requests
+import os
 
 
 def get_iam_token(oauth_token: str) -> str:
@@ -26,7 +27,9 @@ def get_iam_token(oauth_token: str) -> str:
 
 
 if __name__ == "__main__":
-    oauth_token = "y0__xCKjPoQGMHdEyDkxK-DF_mrquSXhEHzxYOo2vc63OKgpfNY"
+    oauth_token = os.getenv("YANDEX_OAUTH_TOKEN") or input("Enter Yandex OAuth token: ").strip()
+    if not oauth_token:
+        raise ValueError("OAuth token is required. Set YANDEX_OAUTH_TOKEN or provide it interactively.")
     
     print("Getting new IAM token...")
     iam_token = get_iam_token(oauth_token)

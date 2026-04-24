@@ -1,7 +1,6 @@
-import requests
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 from loguru import logger
-import re
+import urllib.robotparser as robotparser
 from functools import lru_cache
 
 
@@ -13,34 +12,38 @@ class RobotsChecker:
     def can_fetch(self, url: str, user_agent: str = "*") -> bool:
         """Check if URL is allowed by robots.txt"""
         try:
-            domain = urlparse(url).netloc
-            robots_url = f"{urlparse(url).scheme}://{domain}/robots.txt"
-            
-            if domain not in self.cache:
-                response = requests.get(robots_url, timeout=5)
-                if response.status_code == 200:
-                    self.cache[domain] = self._parse_robots(response.text)
-                else:
-                    self.cache[domain] = {"allow": [], "disallow": []}
-            
-            rules = self.cache[domain]
-            path = urlparse(url).path
-            
-            for pattern in rules["disallow"]:
-                if self._matches_pattern(path, pattern):
-                    logger.debug(f"Blocked by robots.txt: {url} (pattern: {pattern})")
-                    return False
-            
-            return True
-            
+            parsed = urlparse(url)
+            domain = parsed.netloc
+            cached = self.cache.get(domain)
+            if isinstance(cached, dict):
+                path = parsed.path
+                for pattern in cached.get("disallow", []):
+                    if self._matches_pattern(path, pattern):
+                        logger.debug(f"Blocked by robots.txt: {url}")
+                        return False
+                return True
+
+            parser = self._get_parser(parsed.scheme, domain)
+            allowed = parser.can_fetch(user_agent, url)
+            if not allowed:
+                logger.debug(f"Blocked by robots.txt: {url}")
+            return allowed
         except Exception as e:
             logger.warning(f"Could not check robots.txt for {url}: {e}")
             return True
-    
+
+    def _get_parser(self, scheme: str, domain: str) -> robotparser.RobotFileParser:
+        cache_key = f"{scheme}://{domain}"
+        if cache_key not in self.cache:
+            parser = robotparser.RobotFileParser()
+            parser.set_url(f"{cache_key}/robots.txt")
+            parser.read()
+            self.cache[cache_key] = parser
+        return self.cache[cache_key]
+
     def _parse_robots(self, content: str) -> dict:
-        """Parse robots.txt content"""
+        """Backward-compatible simple parser used in tests."""
         rules = {"allow": [], "disallow": [], "crawl_delay": None}
-        
         for line in content.split('\n'):
             line = line.strip().lower()
             if line.startswith('disallow:'):
@@ -53,19 +56,17 @@ class RobotsChecker:
                     rules["allow"].append(path)
             elif line.startswith('crawl-delay:'):
                 try:
-                    delay = float(line.split(':', 1)[1].strip())
-                    rules["crawl_delay"] = delay
+                    rules["crawl_delay"] = float(line.split(':', 1)[1].strip())
                 except ValueError:
                     pass
-        
         return rules
-    
+
     def _matches_pattern(self, path: str, pattern: str) -> bool:
-        """Check if path matches robots.txt pattern"""
+        """Backward-compatible wildcard matching for cached test rules."""
+        import re
         if pattern == "":
             return False
-        
-        regex_pattern = pattern.replace('*', '.*').replace('$', '')
+        regex_pattern = pattern.replace('*', '.*').replace('$', '$')
         return bool(re.match(regex_pattern, path))
     
     def get_crawl_delay(self, domain: str) -> float:
@@ -73,8 +74,12 @@ class RobotsChecker:
         from config.settings import settings
         
         try:
-            rules = self.cache.get(domain, {})
-            crawl_delay = rules.get("crawl_delay")
+            cached = self.cache.get(domain)
+            if isinstance(cached, dict):
+                crawl_delay = cached.get("crawl_delay")
+            else:
+                parser = self.cache.get(f"https://{domain}") or self.cache.get(f"http://{domain}")
+                crawl_delay = parser.crawl_delay("*") if parser else None
             
             if crawl_delay is not None:
                 return max(crawl_delay, 0.1)  # Minimum 0.1s delay

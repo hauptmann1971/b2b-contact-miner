@@ -237,7 +237,7 @@ class ContactMiningPipeline:
                     query=keyword.keyword,
                     country=keyword.country,
                     language=keyword.language,
-                    num_results=2  # Minimal for speed
+                    num_results=settings.SEARCH_RESULTS_PER_KEYWORD
                 )
                 logger.info(f"✓ Search successful: {len(search_results)} results")
                 return search_results, raw_response

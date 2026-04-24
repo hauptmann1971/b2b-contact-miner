@@ -128,11 +128,9 @@ class ExtractionService:
         """Use LLM only for pages with obfuscated emails
         Returns: (ContactInfo, llm_data) where llm_data has request/response/model
         """
-        # Determine which LLM to use (priority: YandexGPT > GigaChat > DeepSeek > OpenAI)
+        # Determine which LLM to use (priority: YandexGPT > DeepSeek > OpenAI)
         if settings.USE_YANDEXGPT and settings.YANDEX_IAM_TOKEN and settings.YANDEX_FOLDER_ID:
             llm_type = "yandexgpt"
-        elif settings.USE_GIGACHAT and settings.GIGACHAT_CLIENT_ID and settings.GIGACHAT_CLIENT_SECRET:
-            llm_type = "gigachat"
         elif settings.USE_DEEPSEEK and settings.DEEPSEEK_API_KEY:
             llm_type = "deepseek"
         elif settings.USE_OPENAI and settings.OPENAI_API_KEY:
@@ -220,35 +218,6 @@ If no contacts found, return:
                 llm_response_data = {
                     "response": content,
                     "full_result": str(result)[:2000]
-                }
-                
-            elif llm_type == "gigachat":
-                from gigachat import GigaChat
-                
-                gc = GigaChat(
-                    credentials=settings.GIGACHAT_CLIENT_ID,
-                    client_secret=settings.GIGACHAT_CLIENT_SECRET,
-                    verify_ssl_certs=False,
-                    scope="GIGACHAT_API_PERS"
-                )
-                
-                # Store request data
-                llm_request_data = {
-                    "prompt": prompt[:2000],
-                    "model": "gigachat"
-                }
-                
-                response = gc.chat(
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.1,
-                    max_tokens=300
-                )
-                
-                content = response.choices[0].message.content
-                
-                # Store response data
-                llm_response_data = {
-                    "response": content
                 }
                 
             elif llm_type == "deepseek":
@@ -417,8 +386,6 @@ If no contacts found, return:
         # Determine which LLM to use
         if settings.USE_YANDEXGPT and settings.YANDEX_IAM_TOKEN and settings.YANDEX_FOLDER_ID:
             llm_type = "yandexgpt"
-        elif settings.USE_GIGACHAT and settings.GIGACHAT_CLIENT_ID and settings.GIGACHAT_CLIENT_SECRET:
-            llm_type = "gigachat"
         elif settings.USE_DEEPSEEK and settings.DEEPSEEK_API_KEY:
             llm_type = "deepseek"
         elif settings.USE_OPENAI and settings.OPENAI_API_KEY:
@@ -470,20 +437,6 @@ If unclear, return: ["business"]
                 response.raise_for_status()
                 result = response.json()
                 content_response = result["result"]["alternatives"][0]["message"]["text"]
-                
-            elif llm_type == "gigachat":
-                from gigachat import GigaChat
-                gc = GigaChat(
-                    credentials=settings.GIGACHAT_CLIENT_ID,
-                    client_secret=settings.GIGACHAT_CLIENT_SECRET,
-                    scope="GIGACHAT_API_PERS"
-                )
-                response = gc.chat(
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.1,
-                    max_tokens=100
-                )
-                content_response = response.choices[0].message.content
                 
             elif llm_type == "deepseek":
                 from openai import OpenAI

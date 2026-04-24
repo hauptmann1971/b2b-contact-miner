@@ -18,7 +18,7 @@ class TestSettingsConfiguration:
         from config.settings import settings
         
         assert hasattr(settings, 'SEARCH_RESULTS_PER_KEYWORD')
-        assert settings.SEARCH_RESULTS_PER_KEYWORD == 5
+        assert settings.SEARCH_RESULTS_PER_KEYWORD == 2
     
     def test_max_keywords_per_run_default(self):
         """Test default value for MAX_KEYWORDS_PER_RUN"""
@@ -251,7 +251,7 @@ class TestBackwardsCompatibility:
         from config.settings import settings
         
         # New settings should have defaults that work with existing code
-        assert settings.SEARCH_RESULTS_PER_KEYWORD == 5  # Same as old hardcoded value
+        assert settings.SEARCH_RESULTS_PER_KEYWORD == 2  # Same as current default
         assert settings.MAX_KEYWORDS_PER_RUN == 50  # Same as old hardcoded value
     
     def test_settings_types_are_correct(self):

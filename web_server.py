@@ -4,6 +4,8 @@ from datetime import datetime, timezone, timezone
 import sys
 import os
 import secrets
+import json
+import logging
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -12,6 +14,7 @@ from models.database import SessionLocal, Keyword, SearchResult, DomainContact, 
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
+logger = logging.getLogger(__name__)
 
 
 def get_db():
@@ -217,6 +220,33 @@ def llm_data_page():
 @app.route('/api/llm-data')
 def api_llm_data():
     """API endpoint для получения LLM и search данных"""
+    expected_token = os.getenv("LLM_DATA_API_TOKEN")
+    provided_token = (
+        request.headers.get("X-API-Key")
+        or request.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+    )
+    if not expected_token or provided_token != expected_token:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    def _sanitize(value):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except Exception:
+                return value[:500]
+        if isinstance(value, dict):
+            redacted = {}
+            for key, item in value.items():
+                key_lower = key.lower()
+                if any(token in key_lower for token in ["token", "secret", "password", "api_key", "authorization"]):
+                    redacted[key] = "***REDACTED***"
+                else:
+                    redacted[key] = _sanitize(item)
+            return redacted
+        if isinstance(value, list):
+            return [_sanitize(item) for item in value[:50]]
+        return value
+
     db = SessionLocal()
     try:
         # Статистика
@@ -231,8 +261,8 @@ def api_llm_data():
             'id': sr.id,
             'keyword_id': sr.keyword_id,
             'url': sr.url,
-            'raw_search_query': sr.raw_search_query,
-            'raw_search_response': sr.raw_search_response
+            'raw_search_query': _sanitize(sr.raw_search_query),
+            'raw_search_response': _sanitize(sr.raw_search_response)
         } for sr in search_results]
         
         # Последние 50 crawl logs с LLM данными
@@ -243,8 +273,8 @@ def api_llm_data():
             'id': log.id,
             'domain': log.domain,
             'llm_model': log.llm_model,
-            'llm_request': log.llm_request,
-            'llm_response': log.llm_response
+            'llm_request': _sanitize(log.llm_request),
+            'llm_response': _sanitize(log.llm_response)
         } for log in crawl_logs]
         
         # Domain contacts с JSON
@@ -254,7 +284,7 @@ def api_llm_data():
         contacts_json_data = [{
             'id': dc.id,
             'domain': dc.domain,
-            'contacts_json': dc.contacts_json
+            'contacts_json': _sanitize(dc.contacts_json)
         } for dc in domain_contacts]
         
         return jsonify({

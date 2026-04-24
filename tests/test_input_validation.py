@@ -242,16 +242,14 @@ class TestSecretKeyGeneration:
     
     def test_secret_key_is_generated(self):
         """Test that secret key is generated if not in env"""
-        import secrets
-        
-        # When SECRET_KEY is not set, it should generate a random one
-        with patch.dict(os.environ, {}, clear=False):
-            if 'SECRET_KEY' not in os.environ:
-                from web_server import app
-                # Should be a hex string of 64 characters (32 bytes)
-                assert len(app.secret_key) == 64
-                # Should be valid hex
-                int(app.secret_key, 16)
+        import importlib
+        import web_server
+
+        # When SECRET_KEY is not set, module reload should generate a random one
+        with patch.dict(os.environ, {}, clear=True):
+            importlib.reload(web_server)
+            assert len(web_server.app.secret_key) == 64
+            int(web_server.app.secret_key, 16)
     
     def test_secret_key_from_env(self):
         """Test that secret key can be set from environment"""

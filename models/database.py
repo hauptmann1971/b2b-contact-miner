@@ -128,7 +128,7 @@ class CrawlLog(Base):
     duration_seconds = Column(Integer, comment="Crawl duration in seconds")
     llm_request = Column(Text, comment="Raw request sent to LLM")
     llm_response = Column(Text, comment="Raw response from LLM")
-    llm_model = Column(String(100), comment="LLM model used (e.g., yandexgpt, gigachat)")
+    llm_model = Column(String(100), comment="LLM model used (e.g., yandexgpt, deepseek, openai)")
     crawled_at = Column(DateTime, default=datetime.utcnow, comment="Crawl timestamp")
 
 

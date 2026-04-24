@@ -12,13 +12,13 @@ class TestExtractionService:
     def test_mailto_extraction(self):
         """Test email extraction from mailto links"""
         content = '<a href="mailto:ceo@company.com">Email</a>'
-        contacts = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
+        contacts, _ = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
         assert "ceo@company.com" in contacts.emails
     
     def test_mailto_with_parameters(self):
         """Test mailto with subject parameter - should strip query params"""
         content = '<a href="mailto:info@company.com?subject=Hello">Contact</a>'
-        contacts = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
+        contacts, _ = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
         assert "info@company.com" in contacts.emails
         # Should not include ?subject=Hello
         assert not any("?" in email for email in contacts.emails)
@@ -46,7 +46,7 @@ class TestExtractionService:
     def test_regular_email_extraction(self):
         """Test regular email extraction"""
         content = "Contact: john.doe@company.com or jane@business.org"
-        contacts = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
+        contacts, _ = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
         assert "john.doe@company.com" in contacts.emails
         assert "jane@business.org" in contacts.emails
     
@@ -58,7 +58,7 @@ class TestExtractionService:
             admin@company.com
             valid.person@company.com
         """
-        contacts = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
+        contacts, _ = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
         
         assert "noreply@company.com" not in contacts.emails
         assert "support@company.com" not in contacts.emails
@@ -73,7 +73,7 @@ class TestExtractionService:
             contact@hotmail.com
             business@company.com
         """
-        contacts = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
+        contacts, _ = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
         
         assert "user@gmail.com" not in contacts.emails
         assert "person@yahoo.com" not in contacts.emails
@@ -86,7 +86,7 @@ class TestExtractionService:
             Telegram: https://t.me/company_channel
             Contact: t.me/support_bot
         """
-        contacts = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
+        contacts, _ = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
         
         assert "https://t.me/company_channel" in contacts.telegram_links
         assert "https://t.me/support_bot" in contacts.telegram_links
@@ -97,7 +97,7 @@ class TestExtractionService:
             LinkedIn: https://linkedin.com/in/john-doe
             Company: https://www.linkedin.com/company/acme-corp
         """
-        contacts = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
+        contacts, _ = self.service.extract_contacts([{"content": content, "type": "regular_page"}])
         
         assert len(contacts.linkedin_links) >= 2
     
@@ -137,7 +137,7 @@ class TestExtractionService:
     
     def test_empty_content(self):
         """Test extraction from empty content"""
-        contacts = self.service.extract_contacts([{"content": "", "type": "regular_page"}])
+        contacts, _ = self.service.extract_contacts([{"content": "", "type": "regular_page"}])
         
         assert len(contacts.emails) == 0
         assert len(contacts.telegram_links) == 0

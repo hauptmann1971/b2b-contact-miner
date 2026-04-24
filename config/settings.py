@@ -23,10 +23,6 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""
     USE_DEEPSEEK: bool = False
     
-    GIGACHAT_CLIENT_ID: str = ""
-    GIGACHAT_CLIENT_SECRET: str = ""
-    USE_GIGACHAT: bool = False
-    
     YANDEX_IAM_TOKEN: str = ""
     YANDEX_FOLDER_ID: str = ""
     USE_YANDEXGPT: bool = True
@@ -101,9 +97,17 @@ class Settings(BaseSettings):
     
     # SonarCloud
     SONAR_TOKEN: Optional[str] = None  # For API access to SonarCloud reports
+    LLM_DATA_API_TOKEN: str = ""
+    API_ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
     
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()

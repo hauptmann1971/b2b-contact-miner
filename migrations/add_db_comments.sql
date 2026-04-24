@@ -64,7 +64,7 @@ ALTER TABLE `crawl_logs`
     MODIFY COLUMN `duration_seconds` INT COMMENT 'Crawl duration in seconds',
     MODIFY COLUMN `llm_request` TEXT COMMENT 'Raw request sent to LLM',
     MODIFY COLUMN `llm_response` TEXT COMMENT 'Raw response from LLM',
-    MODIFY COLUMN `llm_model` VARCHAR(100) COMMENT 'LLM model used (e.g., yandexgpt, gigachat)',
+    MODIFY COLUMN `llm_model` VARCHAR(100) COMMENT 'LLM model used (e.g., yandexgpt, deepseek, openai)',
     MODIFY COLUMN `crawled_at` DATETIME COMMENT 'Crawl timestamp';
 
 -- Pipeline state table

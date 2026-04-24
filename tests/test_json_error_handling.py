@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from services.extraction_service import ExtractionService
 from models.schemas import ContactInfo
+from pydantic import ValidationError
 
 
 class TestJSONErrorHandling:
@@ -29,12 +30,11 @@ class TestJSONErrorHandling:
             mock_settings.USE_YANDEXGPT = True
             mock_settings.YANDEX_IAM_TOKEN = 'test_token'
             mock_settings.YANDEX_FOLDER_ID = 'test_folder'
-            mock_settings.USE_GIGACHAT = False
             mock_settings.USE_DEEPSEEK = False
             mock_settings.USE_OPENAI = False
             
             # Mock requests.post to return invalid JSON
-            with patch('services.extraction_service.requests.post') as mock_post:
+            with patch('requests.post') as mock_post:
                 mock_response = Mock()
                 mock_response.raise_for_status = Mock()
                 mock_response.json.return_value = {
@@ -48,12 +48,13 @@ class TestJSONErrorHandling:
                 }
                 mock_post.return_value = mock_response
                 
-                result = extractor._extract_with_llm_selective(["test content"])
+                contacts, llm_data = extractor._extract_with_llm_selective(["test content"])
                 
-                assert isinstance(result, ContactInfo)
-                assert len(result.emails) == 0
-                assert len(result.telegram_links) == 0
-                assert len(result.linkedin_links) == 0
+                assert isinstance(contacts, ContactInfo)
+                assert llm_data is None
+                assert len(contacts.emails) == 0
+                assert len(contacts.telegram_links) == 0
+                assert len(contacts.linkedin_links) == 0
     
     def test_malformed_json_returns_empty_contact_info(self, extractor):
         """Test that malformed JSON returns empty ContactInfo"""
@@ -61,11 +62,10 @@ class TestJSONErrorHandling:
             mock_settings.USE_YANDEXGPT = True
             mock_settings.YANDEX_IAM_TOKEN = 'test_token'
             mock_settings.YANDEX_FOLDER_ID = 'test_folder'
-            mock_settings.USE_GIGACHAT = False
             mock_settings.USE_DEEPSEEK = False
             mock_settings.USE_OPENAI = False
             
-            with patch('services.extraction_service.requests.post') as mock_post:
+            with patch('requests.post') as mock_post:
                 mock_response = Mock()
                 mock_response.raise_for_status = Mock()
                 mock_response.json.return_value = {
@@ -79,10 +79,11 @@ class TestJSONErrorHandling:
                 }
                 mock_post.return_value = mock_response
                 
-                result = extractor._extract_with_llm_selective(["test content"])
+                contacts, llm_data = extractor._extract_with_llm_selective(["test content"])
                 
-                assert isinstance(result, ContactInfo)
-                assert len(result.emails) == 0
+                assert isinstance(contacts, ContactInfo)
+                assert llm_data is None
+                assert len(contacts.emails) == 0
     
     def test_non_dict_json_returns_empty_contact_info(self, extractor):
         """Test that non-dict JSON response returns empty ContactInfo"""
@@ -90,11 +91,10 @@ class TestJSONErrorHandling:
             mock_settings.USE_YANDEXGPT = True
             mock_settings.YANDEX_IAM_TOKEN = 'test_token'
             mock_settings.YANDEX_FOLDER_ID = 'test_folder'
-            mock_settings.USE_GIGACHAT = False
             mock_settings.USE_DEEPSEEK = False
             mock_settings.USE_OPENAI = False
             
-            with patch('services.extraction_service.requests.post') as mock_post:
+            with patch('requests.post') as mock_post:
                 mock_response = Mock()
                 mock_response.raise_for_status = Mock()
                 mock_response.json.return_value = {
@@ -108,10 +108,11 @@ class TestJSONErrorHandling:
                 }
                 mock_post.return_value = mock_response
                 
-                result = extractor._extract_with_llm_selective(["test content"])
+                contacts, llm_data = extractor._extract_with_llm_selective(["test content"])
                 
-                assert isinstance(result, ContactInfo)
-                assert len(result.emails) == 0
+                assert isinstance(contacts, ContactInfo)
+                assert llm_data is None
+                assert len(contacts.emails) == 0
     
     def test_valid_json_parsed_correctly(self, extractor):
         """Test that valid JSON is parsed correctly"""
@@ -119,7 +120,6 @@ class TestJSONErrorHandling:
             mock_settings.USE_YANDEXGPT = True
             mock_settings.YANDEX_IAM_TOKEN = 'test_token'
             mock_settings.YANDEX_FOLDER_ID = 'test_folder'
-            mock_settings.USE_GIGACHAT = False
             mock_settings.USE_DEEPSEEK = False
             mock_settings.USE_OPENAI = False
             
@@ -133,7 +133,7 @@ class TestJSONErrorHandling:
                 "linkedin": expected_linkedin
             })
             
-            with patch('services.extraction_service.requests.post') as mock_post:
+            with patch('requests.post') as mock_post:
                 mock_response = Mock()
                 mock_response.raise_for_status = Mock()
                 mock_response.json.return_value = {
@@ -147,12 +147,13 @@ class TestJSONErrorHandling:
                 }
                 mock_post.return_value = mock_response
                 
-                result = extractor._extract_with_llm_selective(["test content"])
+                contacts, llm_data = extractor._extract_with_llm_selective(["test content"])
                 
-                assert isinstance(result, ContactInfo)
-                assert result.emails == expected_emails
-                assert result.telegram_links == expected_telegram
-                assert result.linkedin_links == expected_linkedin
+                assert isinstance(contacts, ContactInfo)
+                assert llm_data is not None
+                assert contacts.emails == expected_emails
+                assert contacts.telegram_links == expected_telegram
+                assert contacts.linkedin_links == expected_linkedin
     
     def test_empty_json_object_returns_empty_lists(self, extractor):
         """Test that empty JSON object returns empty lists"""
@@ -160,11 +161,10 @@ class TestJSONErrorHandling:
             mock_settings.USE_YANDEXGPT = True
             mock_settings.YANDEX_IAM_TOKEN = 'test_token'
             mock_settings.YANDEX_FOLDER_ID = 'test_folder'
-            mock_settings.USE_GIGACHAT = False
             mock_settings.USE_DEEPSEEK = False
             mock_settings.USE_OPENAI = False
             
-            with patch('services.extraction_service.requests.post') as mock_post:
+            with patch('requests.post') as mock_post:
                 mock_response = Mock()
                 mock_response.raise_for_status = Mock()
                 mock_response.json.return_value = {
@@ -178,12 +178,13 @@ class TestJSONErrorHandling:
                 }
                 mock_post.return_value = mock_response
                 
-                result = extractor._extract_with_llm_selective(["test content"])
+                contacts, llm_data = extractor._extract_with_llm_selective(["test content"])
                 
-                assert isinstance(result, ContactInfo)
-                assert len(result.emails) == 0
-                assert len(result.telegram_links) == 0
-                assert len(result.linkedin_links) == 0
+                assert isinstance(contacts, ContactInfo)
+                assert llm_data is not None
+                assert len(contacts.emails) == 0
+                assert len(contacts.telegram_links) == 0
+                assert len(contacts.linkedin_links) == 0
     
     def test_json_with_missing_keys_uses_defaults(self, extractor):
         """Test that JSON with missing keys uses default empty lists"""
@@ -191,7 +192,6 @@ class TestJSONErrorHandling:
             mock_settings.USE_YANDEXGPT = True
             mock_settings.YANDEX_IAM_TOKEN = 'test_token'
             mock_settings.YANDEX_FOLDER_ID = 'test_folder'
-            mock_settings.USE_GIGACHAT = False
             mock_settings.USE_DEEPSEEK = False
             mock_settings.USE_OPENAI = False
             
@@ -200,7 +200,7 @@ class TestJSONErrorHandling:
                 # telegram and linkedin keys are missing
             })
             
-            with patch('services.extraction_service.requests.post') as mock_post:
+            with patch('requests.post') as mock_post:
                 mock_response = Mock()
                 mock_response.raise_for_status = Mock()
                 mock_response.json.return_value = {
@@ -214,12 +214,13 @@ class TestJSONErrorHandling:
                 }
                 mock_post.return_value = mock_response
                 
-                result = extractor._extract_with_llm_selective(["test content"])
+                contacts, llm_data = extractor._extract_with_llm_selective(["test content"])
                 
-                assert isinstance(result, ContactInfo)
-                assert result.emails == ["test@company.com"]
-                assert result.telegram_links == []
-                assert result.linkedin_links == []
+                assert isinstance(contacts, ContactInfo)
+                assert llm_data is not None
+                assert contacts.emails == ["test@company.com"]
+                assert contacts.telegram_links == []
+                assert contacts.linkedin_links == []
     
     def test_llm_exception_returns_empty_contact_info(self, extractor):
         """Test that LLM API exception returns empty ContactInfo"""
@@ -227,34 +228,34 @@ class TestJSONErrorHandling:
             mock_settings.USE_YANDEXGPT = True
             mock_settings.YANDEX_IAM_TOKEN = 'test_token'
             mock_settings.YANDEX_FOLDER_ID = 'test_folder'
-            mock_settings.USE_GIGACHAT = False
             mock_settings.USE_DEEPSEEK = False
             mock_settings.USE_OPENAI = False
             
-            with patch('services.extraction_service.requests.post') as mock_post:
+            with patch('requests.post') as mock_post:
                 mock_post.side_effect = Exception("API Error")
                 
-                result = extractor._extract_with_llm_selective(["test content"])
+                contacts, llm_data = extractor._extract_with_llm_selective(["test content"])
                 
-                assert isinstance(result, ContactInfo)
-                assert len(result.emails) == 0
-                assert len(result.telegram_links) == 0
-                assert len(result.linkedin_links) == 0
+                assert isinstance(contacts, ContactInfo)
+                assert llm_data is None
+                assert len(contacts.emails) == 0
+                assert len(contacts.telegram_links) == 0
+                assert len(contacts.linkedin_links) == 0
     
     def test_no_llm_configured_returns_empty_contact_info(self, extractor):
         """Test that when no LLM is configured, returns empty ContactInfo"""
         with patch('services.extraction_service.settings') as mock_settings:
             mock_settings.USE_YANDEXGPT = False
-            mock_settings.USE_GIGACHAT = False
             mock_settings.USE_DEEPSEEK = False
             mock_settings.USE_OPENAI = False
             
-            result = extractor._extract_with_llm_selective(["test content"])
+            contacts, llm_data = extractor._extract_with_llm_selective(["test content"])
             
-            assert isinstance(result, ContactInfo)
-            assert len(result.emails) == 0
-            assert len(result.telegram_links) == 0
-            assert len(result.linkedin_links) == 0
+            assert isinstance(contacts, ContactInfo)
+            assert llm_data is None
+            assert len(contacts.emails) == 0
+            assert len(contacts.telegram_links) == 0
+            assert len(contacts.linkedin_links) == 0
 
 
 class TestContactInfoValidation:
@@ -285,15 +286,13 @@ class TestContactInfoValidation:
     
     def test_contact_info_with_none_values(self):
         """Test creating ContactInfo handles None values"""
-        contact = ContactInfo(
-            emails=None,
-            telegram_links=None,
-            linkedin_links=None,
-            phone_numbers=None
-        )
-        
-        # Should handle None gracefully (depends on Pydantic config)
-        assert contact is not None
+        with pytest.raises(ValidationError):
+            ContactInfo(
+                emails=None,
+                telegram_links=None,
+                linkedin_links=None,
+                phone_numbers=None
+            )
 
 
 if __name__ == '__main__':

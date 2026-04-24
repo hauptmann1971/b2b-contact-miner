@@ -13,6 +13,22 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 class TestDatabaseSessionManagement:
     """Test database session management improvements"""
+
+    @staticmethod
+    def _attach_mock_queue(pipeline):
+        """Attach mocked task queue for orchestrator-mode tests."""
+        queue = AsyncMock()
+        queue.add_task = AsyncMock()
+        queue.get_queue_stats = AsyncMock(return_value={
+            "pending": 0,
+            "running": 0,
+            "completed": 0,
+            "failed": 0,
+            "total": 0,
+            "keywords_in_progress": 0
+        })
+        queue.stop_workers = AsyncMock()
+        pipeline.task_queue = queue
     
     @pytest.fixture
     def mock_keyword(self):
@@ -30,6 +46,7 @@ class TestDatabaseSessionManagement:
         from main import ContactMiningPipeline
         
         pipeline = ContactMiningPipeline()
+        self._attach_mock_queue(pipeline)
         
         # Mock dependencies
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
@@ -62,8 +79,8 @@ class TestDatabaseSessionManagement:
                             # Run pipeline
                             await pipeline.run_pipeline()
                             
-                            # Verify SessionLocal was called multiple times (main + per keyword)
-                            assert mock_session_local.call_count >= 2
+                            # Orchestrator mode now uses one main session for queue orchestration
+                            assert mock_session_local.call_count >= 1
     
     @pytest.mark.asyncio
     async def test_session_closed_in_finally_block(self):
@@ -71,15 +88,14 @@ class TestDatabaseSessionManagement:
         from main import ContactMiningPipeline
         
         pipeline = ContactMiningPipeline()
+        self._attach_mock_queue(pipeline)
         
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
                 with patch('main.KeywordService') as mock_keyword_service:
                     with patch.object(pipeline.state_manager, 'create_run'):
                         mock_db_main = MagicMock()
-                        mock_db_keyword = MagicMock()
-                        
-                        mock_session_local.side_effect = [mock_db_main, mock_db_keyword]
+                        mock_session_local.return_value = mock_db_main
                         
                         mock_keyword_service_instance = MagicMock()
                         mock_keyword_service.return_value = mock_keyword_service_instance
@@ -100,8 +116,8 @@ class TestDatabaseSessionManagement:
                             with patch.object(pipeline.state_manager, 'mark_failed'):
                                 await pipeline.run_pipeline()
                                 
-                                # Verify keyword session was closed
-                                mock_db_keyword.close.assert_called_once()
+                                # Main orchestration DB session should still be closed
+                                mock_db_main.close.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_main_session_closed_at_end(self):
@@ -109,6 +125,7 @@ class TestDatabaseSessionManagement:
         from main import ContactMiningPipeline
         
         pipeline = ContactMiningPipeline()
+        self._attach_mock_queue(pipeline)
         
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
@@ -134,20 +151,14 @@ class TestDatabaseSessionManagement:
         from main import ContactMiningPipeline
         
         pipeline = ContactMiningPipeline()
+        self._attach_mock_queue(pipeline)
         
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
                 with patch('main.KeywordService') as mock_keyword_service:
                     with patch.object(pipeline.state_manager, 'create_run'):
                         mock_db_main = MagicMock()
-                        mock_db_keyword1 = MagicMock()
-                        mock_db_keyword2 = MagicMock()
-                        
-                        mock_session_local.side_effect = [
-                            mock_db_main, 
-                            mock_db_keyword1, 
-                            mock_db_keyword2
-                        ]
+                        mock_session_local.return_value = mock_db_main
                         
                         mock_keyword_service_instance = MagicMock()
                         mock_keyword_service.return_value = mock_keyword_service_instance
@@ -162,12 +173,8 @@ class TestDatabaseSessionManagement:
                             
                             await pipeline.run_pipeline()
                             
-                            # Verify both keyword sessions were closed
-                            mock_db_keyword1.close.assert_called_once()
-                            mock_db_keyword2.close.assert_called_once()
-                            
-                            # Verify they are different sessions
-                            assert mock_db_keyword1 != mock_db_keyword2
+                            # Main orchestration DB session should be closed once
+                            mock_db_main.close.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_session_not_leaked_on_exception(self):
@@ -175,15 +182,14 @@ class TestDatabaseSessionManagement:
         from main import ContactMiningPipeline
         
         pipeline = ContactMiningPipeline()
+        self._attach_mock_queue(pipeline)
         
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
                 with patch('main.KeywordService') as mock_keyword_service:
                     with patch.object(pipeline.state_manager, 'create_run'):
                         mock_db_main = MagicMock()
-                        mock_db_keyword = MagicMock()
-                        
-                        mock_session_local.side_effect = [mock_db_main, mock_db_keyword]
+                        mock_session_local.return_value = mock_db_main
                         
                         mock_keyword_service_instance = MagicMock()
                         mock_keyword_service.return_value = mock_keyword_service_instance
@@ -197,8 +203,8 @@ class TestDatabaseSessionManagement:
                             with patch.object(pipeline.state_manager, 'mark_failed'):
                                 await pipeline.run_pipeline()
                                 
-                                # Session should still be closed even after exception
-                                mock_db_keyword.close.assert_called_once()
+                                # Main DB session should still be closed on exception paths
+                                mock_db_main.close.assert_called_once()
 
 
 class TestSettingsUsageInMain:

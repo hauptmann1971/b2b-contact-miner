@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from models.database import SessionLocal
 from services.export_service import ExportService
 from monitoring.healthcheck import app as health_app
+from config.settings import settings
 from loguru import logger
 import uvicorn
 
@@ -10,8 +11,8 @@ app = FastAPI(title="B2B Contact Miner API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.API_ALLOWED_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

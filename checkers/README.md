@@ -13,8 +13,6 @@
 ### API и сервисы
 - **`test_deepseek.py`** - Тестирование DeepSeek API
 - **`test_deepseek_simple.py`** - Упрощенный тест DeepSeek
-- **`test_gigachat.py`** - Тестирование GigaChat API
-- **`test_gigachat_auth.py`** - Проверка аутентификации GigaChat
 - **`test_yandexgpt.py`** - Тестирование YandexGPT API
 - **`test_duckduckgo.py`** - Тестирование поиска DuckDuckGo
 
@@ -39,7 +37,6 @@ python checkers/test_mysql_connection.py
 
 # Проверить LLM API
 python checkers/test_yandexgpt.py
-python checkers/test_gigachat.py
 ```
 
 ### Запустить все тесты:

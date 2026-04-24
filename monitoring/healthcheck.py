@@ -136,7 +136,7 @@ async def health_check():
         for s in services_status.values()
     )
     
-    total_time = round((datetime.utcnow() - start_time).total_seconds() * 1000, 2)
+    total_time = round((datetime.now(timezone.utc) - start_time).total_seconds() * 1000, 2)
     
     return HealthResponse(
         status="healthy" if all_healthy else "unhealthy",

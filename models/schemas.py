@@ -23,10 +23,10 @@ class KeywordResponse(BaseModel):
 
 
 class ContactInfo(BaseModel):
-    emails: List[str] = []
-    telegram_links: List[str] = []
-    linkedin_links: List[str] = []
-    phone_numbers: List[str] = []
+    emails: List[str] = Field(default_factory=list)
+    telegram_links: List[str] = Field(default_factory=list)
+    linkedin_links: List[str] = Field(default_factory=list)
+    phone_numbers: List[str] = Field(default_factory=list)
 
 
 class DomainContactResponse(BaseModel):

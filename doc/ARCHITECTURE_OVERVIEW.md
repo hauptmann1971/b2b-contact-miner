@@ -49,7 +49,7 @@ User → Web UI (Flask) → MySQL Database
    ↓
 5. Crawl resulting websites with Playwright
    ↓
-6. Extract contacts using LLM (YandexGPT/GigaChat)
+6. Extract contacts using LLM (YandexGPT/DeepSeek/OpenAI)
    ↓
 7. Save contacts to MySQL (contacts table)
    ↓
@@ -73,7 +73,8 @@ User → Web UI (Flask) → MySQL Database
 
 **AI/ML:**
 - YandexGPT
-- GigaChat
+- DeepSeek
+- OpenAI
 
 **DevOps:**
 - GitHub Actions (CI/CD)

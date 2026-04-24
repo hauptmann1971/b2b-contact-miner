@@ -47,9 +47,8 @@
 
 **Поддерживаемые LLM (приоритет):**
 1. YandexGPT
-2. GigaChat
-3. DeepSeek
-4. OpenAI
+2. DeepSeek
+3. OpenAI
 
 ---
 
@@ -68,11 +67,6 @@ USE_LLM_EXTRACTION=false  # Только regex (быстрее, дешевле)
 USE_YANDEXGPT=true
 YANDEX_IAM_TOKEN=your_token_here
 YANDEX_FOLDER_ID=your_folder_id
-
-# GigaChat
-USE_GIGACHAT=true
-GIGACHAT_CLIENT_ID=your_client_id
-GIGACHAT_CLIENT_SECRET=your_secret
 
 # DeepSeek
 USE_DEEPSEEK=true

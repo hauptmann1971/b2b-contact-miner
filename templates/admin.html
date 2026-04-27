@@ -61,6 +61,23 @@
         th, td { padding: 10px; border-bottom: 1px solid #1e293b; text-align: left; font-size: 0.92em; }
         th { color: #cbd5e1; }
         .muted { color: #94a3b8; }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 0 0 12px 0;
+        }
+        .btn {
+            color: #e5e7eb;
+            text-decoration: none;
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 9px 12px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+        .btn-primary { background: #1d4ed8; border-color: #1d4ed8; }
     </style>
 </head>
 <body>
@@ -75,6 +92,27 @@
                 <a href="{{ url_for('api_docs_page') }}">API Docs</a>
             </div>
         </header>
+
+        <div class="panel">
+            <h2>🎛️ Admin Actions</h2>
+            <div class="toolbar">
+                <form method="POST" action="{{ url_for('admin_recover_stale') }}">
+                    <button type="submit" class="btn btn-primary">Recover Stale</button>
+                </form>
+                <form method="POST" action="{{ url_for('admin_retry_failed') }}" style="display:flex; gap:8px; align-items:center;">
+                    <input type="number" name="limit" value="20" min="1" max="200" class="btn" style="width:90px;">
+                    <button type="submit" class="btn btn-primary">Retry Failed</button>
+                </form>
+                <button type="button" class="btn" onclick="location.reload()">Refresh now</button>
+                <label class="btn" style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="autoRefreshToggle"> Auto-refresh (10s)
+                </label>
+            </div>
+            <div class="muted">
+                Active worker locks: <strong>{{ active_worker_locks }}</strong> |
+                Oldest lock age: <strong>{{ oldest_lock_minutes }}</strong> min
+            </div>
+        </div>
 
         <div class="cards">
             <div class="card"><h3>Total Tasks</h3><div class="value">{{ total_tasks }}</div></div>
@@ -215,5 +253,20 @@
             {% endif %}
         </div>
     </div>
+    <script>
+        (function () {
+            const toggle = document.getElementById('autoRefreshToggle');
+            let timer = null;
+            if (!toggle) return;
+            toggle.addEventListener('change', function () {
+                if (toggle.checked) {
+                    timer = setInterval(function () { location.reload(); }, 10000);
+                } else if (timer) {
+                    clearInterval(timer);
+                    timer = null;
+                }
+            });
+        })();
+    </script>
 </body>
 </html>

@@ -179,8 +179,12 @@ def admin_dashboard():
             TaskQueue.status == 'running',
             TaskQueue.locked_at.isnot(None)
         ).order_by(desc(TaskQueue.locked_at)).all()
+        oldest_lock_minutes = 0.0
         for task in running_tasks:
             try:
+                if task.locked_at:
+                    lock_age_min = (datetime.now(timezone.utc) - task.locked_at).total_seconds() / 60
+                    oldest_lock_minutes = max(oldest_lock_minutes, lock_age_min)
                 if task.locked_at and task.locked_at.timestamp() < (now_ts - settings.TASK_LOCK_TIMEOUT):
                     stale_tasks.append(task)
             except Exception:
@@ -213,10 +217,73 @@ def admin_dashboard():
             failed_tasks=failed_tasks,
             latest_runs=latest_runs,
             recent_crawl_errors=recent_crawl_errors,
-            smoke_reports=smoke_reports
+            smoke_reports=smoke_reports,
+            active_worker_locks=len(running_tasks),
+            oldest_lock_minutes=round(oldest_lock_minutes, 1)
         )
     finally:
         db.close()
+
+
+@app.route('/admin/actions/recover-stale', methods=['POST'])
+def admin_recover_stale():
+    """Recover stale running tasks by returning them to pending state."""
+    db = SessionLocal()
+    try:
+        from config.settings import settings
+        timeout_threshold = datetime.now(timezone.utc).timestamp() - settings.TASK_LOCK_TIMEOUT
+        stale_tasks = db.query(TaskQueue).filter(
+            TaskQueue.status == 'running',
+            TaskQueue.locked_at.isnot(None)
+        ).all()
+        recovered = 0
+        for task in stale_tasks:
+            try:
+                if task.locked_at and task.locked_at.timestamp() < timeout_threshold:
+                    task.status = 'pending'
+                    task.locked_by = None
+                    task.locked_at = None
+                    task.error_message = "Recovered manually from admin console stale state"
+                    recovered += 1
+            except Exception:
+                continue
+        db.commit()
+        flash(f'Recovered stale tasks: {recovered}', 'success')
+    except Exception as e:
+        db.rollback()
+        flash(f'Failed to recover stale tasks: {e}', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/actions/retry-failed', methods=['POST'])
+def admin_retry_failed():
+    """Move recent failed tasks back to pending for retry."""
+    db = SessionLocal()
+    try:
+        limit = request.form.get('limit', 20, type=int)
+        limit = max(1, min(limit, 200))
+        failed_tasks = db.query(TaskQueue).filter(
+            TaskQueue.status == 'failed'
+        ).order_by(desc(TaskQueue.created_at)).limit(limit).all()
+
+        retried = 0
+        for task in failed_tasks:
+            task.status = 'pending'
+            task.completed_at = None
+            task.locked_by = None
+            task.locked_at = None
+            # keep retry_count/error_message for traceability
+            retried += 1
+        db.commit()
+        flash(f'Requeued failed tasks: {retried}', 'success')
+    except Exception as e:
+        db.rollback()
+        flash(f'Failed to requeue failed tasks: {e}', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin_dashboard'))
 
 
 @app.route('/add_keyword', methods=['POST'])

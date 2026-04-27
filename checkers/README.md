@@ -51,6 +51,9 @@
 
   # Weekly smoke с записью в БД
   py checkers/run_weekly_smoke.py --limit 15 --write-db
+
+  # KPI-gate для CI/cron (ненулевой код выхода при деградации)
+  py checkers/run_weekly_smoke.py --limit 15 --min-with-contacts-rate 25 --max-zero-page-rate 45 --max-failures 0
   ```
 
 ## 🚀 Использование

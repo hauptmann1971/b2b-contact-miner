@@ -20,8 +20,8 @@ class ExtractionService:
         self.telegram_join_pattern = re.compile(r'join\.chat/([A-Za-z0-9_-]+)')
         
         # LinkedIn patterns
-        self.linkedin_pattern = re.compile(r'(?:https?://)?(?:www\.)?linkedin\.com/(?:in|company)/([a-zA-Z0-9_-]+)')
-        self.linkedin_text_pattern = re.compile(r'LinkedIn[:\s]*(?:https?://)?(?:www\.)?linkedin\.com/(?:in|company)/([a-zA-Z0-9_-]+)', re.IGNORECASE)
+        self.linkedin_pattern = re.compile(r'(?:https?://)?(?:www\.)?linkedin\.com/(in|company)/([a-zA-Z0-9_-]+)')
+        self.linkedin_text_pattern = re.compile(r'LinkedIn[:\s]*(?:https?://)?(?:www\.)?linkedin\.com/(in|company)/([a-zA-Z0-9_-]+)', re.IGNORECASE)
         
         self.phone_pattern = re.compile(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}')
         
@@ -46,6 +46,7 @@ class ExtractionService:
         
         for item in content_list:
             content = item.get("content", "")
+            html = item.get("html", "")
             url = item.get("url", "")
             page_type = item.get("type", "")
             
@@ -75,9 +76,20 @@ class ExtractionService:
                 telegram_links.add(f"https://t.me/{username}")
             
             # Check for t.me links in href attributes
-            telegram_href = re.findall(r'href=["\']([^"\']*t\.me[^"\']*)["\']', content)
+            telegram_href = re.findall(r'href=["\']([^"\']*t\.me[^"\']*)["\']', html, flags=re.IGNORECASE)
             for link in telegram_href:
                 telegram_links.add(link)
+
+            # Extract LinkedIn href links directly from HTML attributes.
+            linkedin_href = re.findall(r'href=["\']([^"\']*linkedin\.com/(?:in|company)/[^"\']+)["\']', html, flags=re.IGNORECASE)
+            for link in linkedin_href:
+                if link.startswith("//"):
+                    link = f"https:{link}"
+                elif link.startswith("/"):
+                    continue
+                elif not link.startswith("http"):
+                    link = f"https://{link.lstrip('/')}"
+                linkedin_links.add(link)
             
             # Check for join.chat links
             join_chat_matches = self.telegram_join_pattern.finditer(content)
@@ -86,14 +98,17 @@ class ExtractionService:
             
             linkedin_matches = self.linkedin_pattern.finditer(content)
             for match in linkedin_matches:
-                full_url = f"https://linkedin.com/in/{match.group(1)}" if '/' not in match.group(1) else match.group(0)
+                section = match.group(1)
+                profile_id = match.group(2)
+                full_url = f"https://linkedin.com/{section}/{profile_id}"
                 linkedin_links.add(full_url)
             
             # Also check LinkedIn text patterns
             linkedin_text_matches = self.linkedin_text_pattern.finditer(content)
             for match in linkedin_text_matches:
-                profile_id = match.group(1)
-                linkedin_links.add(f"https://linkedin.com/in/{profile_id}")
+                section = match.group(1)
+                profile_id = match.group(2)
+                linkedin_links.add(f"https://linkedin.com/{section}/{profile_id}")
             
             phones = self.phone_pattern.findall(content)
             for phone in phones:
@@ -339,7 +354,7 @@ If no contacts found, return:
     def _is_valid_business_email(self, email: str) -> bool:
         """Validate email format"""
         try:
-            valid = validate_email(email)
+            valid = validate_email(email, check_deliverability=False)
             email_lower = email.lower()
             
             for pattern in settings.BLOCKED_EMAIL_PATTERNS:

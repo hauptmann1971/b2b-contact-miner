@@ -42,6 +42,7 @@ class CrawlerService:
     
     async def crawl_domain(self, base_url: str) -> Dict:
         """Crawl a domain with prioritized link extraction and deduplication"""
+        base_url = self._normalize_base_url(base_url)
         domain = urlparse(base_url).netloc
         
         # Note: Redis deduplication removed - using database-backed task queue instead
@@ -89,18 +90,19 @@ class CrawlerService:
                         semaphore = self.rate_limiter.get_semaphore(domain)
                         async with semaphore:
                             try:
-                                content = await self._crawl_page_with_rotation(page, prioritized_link.url)
-                                if content:
+                                page_data = await self._crawl_page_with_rotation(page, prioritized_link.url)
+                                if page_data:
                                     all_content.append({
                                         "url": prioritized_link.url,
-                                        "content": content,
+                                        "content": page_data.get("text", ""),
+                                        "html": page_data.get("html", ""),
                                         "type": "contact_page" if self._is_contact_page(prioritized_link.url) else "regular_page",
                                         "priority": prioritized_link.priority
                                     })
                                     pages_crawled += 1
                                     logger.info(f"Crawled [{prioritized_link.priority}] {prioritized_link.url}")
                                     
-                                    if prioritized_link.priority >= 8 and self._has_quick_contacts(content):
+                                    if prioritized_link.priority >= 8 and self._has_quick_contacts(page_data.get("text", "")):
                                         logger.info(f"Found contacts on high-priority page, stopping early for {domain}")
                                         break
                                 
@@ -126,6 +128,8 @@ class CrawlerService:
         # Note: Redis caching removed - using database-backed task queue for tracking
         
         logger.info(f"Completed crawl for {domain}: {pages_crawled} pages in {duration:.2f}s")
+        if pages_crawled == 0:
+            logger.warning(f"No pages crawled for {domain}; likely timeout/blocked or invalid entry URL")
         
         return {
             "domain": domain,
@@ -179,20 +183,36 @@ class CrawlerService:
             logger.debug(f"No sitemap found for {base_url}: {e}")
             return None
     
-    async def _crawl_page_with_rotation(self, page: Page, url: str) -> Optional[str]:
-        """Crawl page with rotated User-Agent"""
+    async def _crawl_page_with_rotation(self, page: Page, url: str) -> Optional[Dict[str, str]]:
+        """Crawl page with rotated User-Agent and return text+html."""
         try:
             new_ua = self._get_random_user_agent()
             await page.set_extra_http_headers({"User-Agent": new_ua})
-            
-            await page.goto(url, timeout=self.timeout, wait_until="networkidle")
+
+            try:
+                await page.goto(url, timeout=self.timeout, wait_until="networkidle")
+            except Exception:
+                # Some sites never reach "networkidle" due to trackers/streams; fallback to DOM ready.
+                await page.goto(url, timeout=self.timeout, wait_until="domcontentloaded")
             await asyncio.sleep(1)
             
             text_content = await page.inner_text("body")
-            return text_content
+            html_content = await page.content()
+            return {
+                "text": text_content,
+                "html": html_content
+            }
         except Exception as e:
             logger.error(f"Error crawling {url}: {e}")
             return None
+
+    def _normalize_base_url(self, url: str) -> str:
+        """Normalize SERP URL to domain root for contact crawling."""
+        parsed = urlparse(url)
+        if not parsed.scheme:
+            url = f"https://{url}"
+            parsed = urlparse(url)
+        return f"{parsed.scheme}://{parsed.netloc}/"
     
     async def _extract_links_with_priority(self, page: Page, current_url: str, 
                                           depth: int, domain: str) -> List[PrioritizedLink]:
@@ -206,7 +226,7 @@ class CrawlerService:
             for el in elements:
                 href = await el.get_attribute("href")
                 if href:
-                    links.append(href)
+                    links.append(urljoin(current_url, href))
             
             prioritized_links = []
             seen_urls = set()
@@ -289,7 +309,7 @@ class CrawlerService:
         try:
             parsed = urlparse(url)
             return (
-                parsed.netloc == domain and
+                parsed.netloc in ("", domain) and
                 len(parsed.path) > 1 and
                 not any(parsed.path.endswith(ext) for ext in ['.pdf', '.jpg', '.png', '.zip', '.mp4', '.doc'])
             )
@@ -333,11 +353,12 @@ class CrawlerService:
                         full_url = urljoin(base_url, path)
                         
                         try:
-                            content = await self._crawl_page_with_rotation(page, full_url)
-                            if content:
+                            page_data = await self._crawl_page_with_rotation(page, full_url)
+                            if page_data:
                                 all_content.append({
                                     "url": full_url,
-                                    "content": content,
+                                    "content": page_data.get("text", ""),
+                                    "html": page_data.get("html", ""),
                                     "type": "contact_page",
                                     "priority": 10
                                 })

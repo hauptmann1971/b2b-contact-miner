@@ -379,7 +379,12 @@ class DatabaseTaskQueue:
                 url=url,
                 status_code=200,
                 pages_crawled=crawl_data["pages_crawled"],
-                duration_seconds=int(crawl_data["duration"])
+                duration_seconds=int(crawl_data["duration"]),
+                error_message=(
+                    crawl_data.get("zero_page_reason")
+                    if crawl_data.get("pages_crawled", 0) == 0
+                    else None
+                )
             )
             db.add(crawl_log)
             db.commit()
@@ -668,23 +673,59 @@ class DatabaseTaskQueue:
             )
             total_crawls_24h = crawl_logs_24h.count()
             zero_page_crawls_24h = crawl_logs_24h.filter(CrawlLog.pages_crawled == 0).count()
+            timeout_crawls_24h = crawl_logs_24h.filter(
+                CrawlLog.error_message.isnot(None),
+                CrawlLog.error_message.ilike("%timeout%")
+            ).count()
 
             contacts_24h = db.query(DomainContact).filter(
                 DomainContact.created_at >= day_ago
             )
             total_domains_24h = contacts_24h.count()
             domains_with_any_social_24h = 0
+            domains_with_contacts_24h = 0
             for row in contacts_24h.with_entities(DomainContact.contacts_json).all():
                 payload = row[0] or {}
+                emails = payload.get("emails") if isinstance(payload, dict) else None
+                telegram = payload.get("telegram") if isinstance(payload, dict) else None
+                linkedin = payload.get("linkedin") if isinstance(payload, dict) else None
                 social = payload.get("social") if isinstance(payload, dict) else None
+                if any(bool(v) for v in [emails, telegram, linkedin]) or (
+                    isinstance(social, dict) and any(bool(v) for v in social.values())
+                ):
+                    domains_with_contacts_24h += 1
                 if isinstance(social, dict) and any(bool(v) for v in social.values()):
                     domains_with_any_social_24h += 1
 
+            contacts_rows_24h = db.query(Contact.domain_contact_id).join(
+                DomainContact, Contact.domain_contact_id == DomainContact.id
+            ).filter(
+                DomainContact.created_at >= day_ago
+            ).count()
+
             stats['crawls_24h'] = total_crawls_24h
             stats['zero_page_crawls_24h'] = zero_page_crawls_24h
+            stats['timeout_crawls_24h'] = timeout_crawls_24h
             stats['crawl_success_rate_24h'] = round(
                 ((total_crawls_24h - zero_page_crawls_24h) / total_crawls_24h) * 100, 2
             ) if total_crawls_24h else 100.0
+            stats['timeout_rate_24h'] = round(
+                (timeout_crawls_24h / total_crawls_24h) * 100, 2
+            ) if total_crawls_24h else 0.0
+            stats['domains_with_contacts_24h'] = domains_with_contacts_24h
+            stats['domains_with_contacts_rate_24h'] = round(
+                (domains_with_contacts_24h / total_domains_24h) * 100, 2
+            ) if total_domains_24h else 0.0
+            stats['avg_contacts_per_domain_24h'] = round(
+                contacts_rows_24h / total_domains_24h, 2
+            ) if total_domains_24h else 0.0
+            llm_extractions_24h = contacts_24h.filter(
+                DomainContact.extraction_method == "llm"
+            ).count()
+            stats['llm_extractions_24h'] = llm_extractions_24h
+            stats['llm_extraction_rate_24h'] = round(
+                (llm_extractions_24h / total_domains_24h) * 100, 2
+            ) if total_domains_24h else 0.0
             stats['domains_with_social_24h'] = domains_with_any_social_24h
             stats['social_coverage_rate_24h'] = round(
                 (domains_with_any_social_24h / total_domains_24h) * 100, 2

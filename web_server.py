@@ -376,22 +376,47 @@ def contacts_list():
         per_page = 50
         contact_type = request.args.get('type', '')
         query = request.args.get('q', '').strip()
-        
-        contacts_query = db.query(Contact).join(DomainContact).join(SearchResult).join(Keyword)
-        
+
+        where_parts = []
+        params = {}
         if contact_type:
-            contacts_query = contacts_query.filter(Contact.contact_type == contact_type)
+            where_parts.append("LOWER(c.contact_type) = :contact_type")
+            params["contact_type"] = contact_type.lower()
         if query:
-            like_pattern = f"%{query}%"
-            contacts_query = contacts_query.filter(
-                (Contact.value.ilike(like_pattern)) |
-                (DomainContact.domain.ilike(like_pattern)) |
-                (Keyword.keyword.ilike(like_pattern))
-            )
-        
-        contacts_query = contacts_query.order_by(desc(Contact.created_at))
-        total = contacts_query.count()
-        contacts = contacts_query.offset((page - 1) * per_page).limit(per_page).all()
+            where_parts.append("(c.value LIKE :q OR dc.domain LIKE :q OR k.keyword LIKE :q)")
+            params["q"] = f"%{query}%"
+        where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+
+        total_sql = text(f"""
+            SELECT COUNT(*)
+            FROM contacts c
+            JOIN domain_contacts dc ON dc.id = c.domain_contact_id
+            JOIN search_results sr ON sr.id = dc.search_result_id
+            JOIN keywords k ON k.id = sr.keyword_id
+            {where_sql}
+        """)
+        total = db.execute(total_sql, params).scalar() or 0
+
+        params.update({"limit": per_page, "offset": (page - 1) * per_page})
+        data_sql = text(f"""
+            SELECT
+                c.id,
+                c.contact_type,
+                c.value,
+                c.is_verified,
+                c.created_at,
+                dc.domain AS domain_name,
+                k.id AS keyword_id,
+                k.keyword AS keyword_text
+            FROM contacts c
+            JOIN domain_contacts dc ON dc.id = c.domain_contact_id
+            JOIN search_results sr ON sr.id = dc.search_result_id
+            JOIN keywords k ON k.id = sr.keyword_id
+            {where_sql}
+            ORDER BY c.created_at DESC
+            LIMIT :limit OFFSET :offset
+        """)
+        contacts = db.execute(data_sql, params).mappings().all()
         
         return render_template('contacts.html',
                              contacts=contacts,

@@ -39,6 +39,13 @@ class CrawlerService:
         self.timeout = settings.REQUEST_TIMEOUT * 1000
         self.processed_domains = set()
         self.rate_limiter = DomainRateLimiter(settings.MAX_CONCURRENT_DOMAINS_PER_SITE)
+
+    @staticmethod
+    def _remaining_domain_timeout_ms(start_time: float, reserve_ms: int = 500) -> int:
+        """Calculate remaining crawl budget for current domain in milliseconds."""
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        total_budget_ms = settings.DOMAIN_CRAWL_TIMEOUT * 1000
+        return max(1, total_budget_ms - elapsed_ms - reserve_ms)
     
     async def crawl_domain(self, base_url: str) -> Dict:
         """Crawl a domain with prioritized link extraction and deduplication"""
@@ -89,6 +96,11 @@ class CrawlerService:
                             logger.warning(f"Domain crawl timeout for {domain} after {elapsed_time:.0f}s ({pages_crawled} pages)")
                             zero_page_reason = "domain_timeout"
                             break
+                        remaining_timeout_ms = self._remaining_domain_timeout_ms(start_time)
+                        if remaining_timeout_ms <= 1:
+                            logger.warning(f"Domain crawl budget exhausted for {domain} ({pages_crawled} pages)")
+                            zero_page_reason = "domain_timeout_budget_exhausted"
+                            break
                         
                         prioritized_link = pages_to_crawl.pop(0)
                         
@@ -98,7 +110,11 @@ class CrawlerService:
                         semaphore = self.rate_limiter.get_semaphore(domain)
                         async with semaphore:
                             try:
-                                page_data = await self._crawl_page_with_rotation(page, prioritized_link.url)
+                                page_data = await self._crawl_page_with_rotation(
+                                    page,
+                                    prioritized_link.url,
+                                    timeout_budget_ms=remaining_timeout_ms
+                                )
                                 if page_data:
                                     all_content.append({
                                         "url": prioritized_link.url,
@@ -198,19 +214,26 @@ class CrawlerService:
             logger.debug(f"No sitemap found for {base_url}: {e}")
             return None
     
-    async def _crawl_page_with_rotation(self, page: Page, url: str) -> Optional[Dict[str, str]]:
+    async def _crawl_page_with_rotation(
+        self,
+        page: Page,
+        url: str,
+        timeout_budget_ms: Optional[int] = None
+    ) -> Optional[Dict[str, str]]:
         """Crawl page with rotated User-Agent and return text+html."""
         try:
             new_ua = self._get_random_user_agent()
             await page.set_extra_http_headers({"User-Agent": new_ua})
+            primary_timeout = min(self.timeout, timeout_budget_ms) if timeout_budget_ms else self.timeout
+            fallback_timeout = min(settings.REQUEST_TIMEOUT_FALLBACK * 1000, timeout_budget_ms) if timeout_budget_ms else settings.REQUEST_TIMEOUT_FALLBACK * 1000
 
             try:
-                await page.goto(url, timeout=self.timeout, wait_until="networkidle")
+                await page.goto(url, timeout=primary_timeout, wait_until="networkidle")
             except Exception:
                 # Some sites never reach "networkidle" due to trackers/streams; fallback to DOM ready.
                 await page.goto(
                     url,
-                    timeout=settings.REQUEST_TIMEOUT_FALLBACK * 1000,
+                    timeout=fallback_timeout,
                     wait_until="domcontentloaded"
                 )
             await asyncio.sleep(1)
@@ -375,10 +398,24 @@ class CrawlerService:
                 
                 try:
                     for path in contact_page_paths:
+                        elapsed_time = time.time() - start_time
+                        if elapsed_time > settings.DOMAIN_CRAWL_TIMEOUT:
+                            logger.warning(
+                                f"Fast crawl domain timeout for {domain} after {elapsed_time:.0f}s ({pages_crawled} pages)"
+                            )
+                            break
+                        remaining_timeout_ms = self._remaining_domain_timeout_ms(start_time)
+                        if remaining_timeout_ms <= 1:
+                            logger.warning(f"Fast crawl budget exhausted for {domain} ({pages_crawled} pages)")
+                            break
                         full_url = urljoin(base_url, path)
                         
                         try:
-                            page_data = await self._crawl_page_with_rotation(page, full_url)
+                            page_data = await self._crawl_page_with_rotation(
+                                page,
+                                full_url,
+                                timeout_budget_ms=remaining_timeout_ms
+                            )
                             if page_data:
                                 all_content.append({
                                     "url": full_url,

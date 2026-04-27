@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     SAVE_MAX_RETRIES: int = 3        # DB lock issues
     TASK_LOCK_TIMEOUT: int = 300     # seconds before lock expires (5 minutes)
     ZERO_PAGE_CRAWLS_ALERT_THRESHOLD: int = 5
+    TIMEOUT_RATE_ALERT_THRESHOLD_PCT: float = 35.0
+    CONTACTS_RATE_ALERT_THRESHOLD_PCT: float = 20.0
+    AVG_CONTACTS_PER_DOMAIN_ALERT_THRESHOLD: float = 0.5
     
     # Logging
     LOG_FORMAT: str = "text"  # "text" or "json"

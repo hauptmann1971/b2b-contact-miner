@@ -135,11 +135,19 @@ async def health_check():
         s.get("status") in ["healthy", "available"] 
         for s in services_status.values()
     )
+    queue_quality_degraded = False
+    queue_stats = services_status.get("task_queue", {})
+    timeout_rate = float(queue_stats.get("timeout_rate_24h", 0.0) or 0.0)
+    contacts_rate = float(queue_stats.get("domains_with_contacts_rate_24h", 0.0) or 0.0)
+    if timeout_rate >= settings.TIMEOUT_RATE_ALERT_THRESHOLD_PCT:
+        queue_quality_degraded = True
+    if contacts_rate <= settings.CONTACTS_RATE_ALERT_THRESHOLD_PCT and queue_stats.get("total_tasks", 0):
+        queue_quality_degraded = True
     
     total_time = round((datetime.now(timezone.utc) - start_time).total_seconds() * 1000, 2)
     
     return HealthResponse(
-        status="healthy" if all_healthy else "unhealthy",
+        status="degraded" if (all_healthy and queue_quality_degraded) else ("healthy" if all_healthy else "unhealthy"),
         timestamp=datetime.now(timezone.utc).isoformat(),
         services=services_status,
         queue_size=services_status.get("task_queue", {}).get("pending_tasks", 0),

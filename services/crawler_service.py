@@ -237,8 +237,16 @@ class CrawlerService:
                     wait_until="domcontentloaded"
                 )
             await asyncio.sleep(1)
-            
-            text_content = await page.inner_text("body")
+
+            # Prefer rendered body text, fallback to textContent for dynamic pages.
+            try:
+                text_content = await page.inner_text("body", timeout=min(5000, primary_timeout))
+            except Exception:
+                body_handle = await page.query_selector("body")
+                if body_handle:
+                    text_content = (await body_handle.text_content()) or ""
+                else:
+                    text_content = ""
             html_content = await page.content()
             return {
                 "text": text_content,

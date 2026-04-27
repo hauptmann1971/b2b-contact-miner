@@ -7,6 +7,7 @@ import secrets
 import json
 import logging
 import re
+from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -193,6 +194,15 @@ def admin_dashboard():
         recent_crawl_errors = db.query(CrawlLog).filter(
             CrawlLog.error_message.isnot(None)
         ).order_by(desc(CrawlLog.crawled_at)).limit(10).all()
+        smoke_reports_dir = Path(os.path.dirname(os.path.abspath(__file__))) / "artifacts" / "smoke-reports"
+        smoke_reports = []
+        if smoke_reports_dir.exists():
+            for report in sorted(smoke_reports_dir.glob("smoke_quality_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:10]:
+                smoke_reports.append({
+                    "name": report.name,
+                    "path": str(report),
+                    "modified_at": datetime.fromtimestamp(report.stat().st_mtime, tz=timezone.utc)
+                })
 
         return render_template(
             'admin.html',
@@ -202,7 +212,8 @@ def admin_dashboard():
             stale_tasks=stale_tasks[:10],
             failed_tasks=failed_tasks,
             latest_runs=latest_runs,
-            recent_crawl_errors=recent_crawl_errors
+            recent_crawl_errors=recent_crawl_errors,
+            smoke_reports=smoke_reports
         )
     finally:
         db.close()

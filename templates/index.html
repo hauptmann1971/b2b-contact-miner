@@ -259,7 +259,7 @@
     <div class="container">
         <header>
             <h1>🔍 B2B Contact Miner</h1>
-            <p class="subtitle">User Workspace: ввод ключевых слов, результаты и экспорт</p>
+            <p class="subtitle">Пользовательская страница: ввод ключевых слов, результаты и экспорт</p>
         </header>
         
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -414,38 +414,6 @@
         </div>
 
         <div class="recent-keywords">
-            <h2>🚀 Последние запуски пайплайна</h2>
-            {% if recent_runs %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Run ID</th>
-                        <th>Статус</th>
-                        <th>Прогресс</th>
-                        <th>Сайтов обработано</th>
-                        <th>Контактов найдено</th>
-                        <th>Обновлен</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for run in recent_runs %}
-                    <tr>
-                        <td><strong>{{ run.run_id }}</strong></td>
-                        <td>{{ run.status }}</td>
-                        <td>{{ run.progress_percent }}%</td>
-                        <td>{{ run.websites_processed }}</td>
-                        <td>{{ run.contacts_found }}</td>
-                        <td>{{ run.updated_at.strftime('%d.%m.%Y %H:%M') if run.updated_at else '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p style="color: #666; text-align: center; padding: 20px;">Запуски пока не зафиксированы.</p>
-            {% endif %}
-        </div>
-
-        <div class="recent-keywords">
             <h2>📤 Последние найденные контакты</h2>
             {% if recent_contacts %}
             <table>
@@ -474,14 +442,11 @@
         </div>
         
         <div class="nav-links">
-                <a href="{{ url_for('user_workspace') }}" class="nav-link">👤 User Workspace</a>
-                <a href="{{ url_for('admin_dashboard') }}" class="nav-link">🛠️ Admin Console</a>
+                <a href="{{ url_for('user_workspace') }}" class="nav-link">👤 Страница пользователя</a>
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-link">🛠️ Страница администратора</a>
                 <a href="{{ url_for('keywords_list') }}" class="nav-link">Все ключевые слова</a>
                 <a href="{{ url_for('contacts_list') }}" class="nav-link">Все контакты</a>
                 <a href="{{ url_for('export_flat_csv') }}" class="nav-link">⬇️ Экспорт CSV</a>
-                <a href="{{ url_for('llm_data_page') }}" class="nav-link">🔍 LLM Data</a>
-                <a href="{{ url_for('health_check_page') }}" class="nav-link">💚 Health Check</a>
-                <a href="{{ url_for('api_docs_page') }}" class="nav-link">📡 API Docs</a>
             </div>
         </div>
     </div>

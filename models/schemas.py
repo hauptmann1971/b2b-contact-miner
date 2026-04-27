@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict
 from datetime import datetime
 
@@ -18,8 +18,7 @@ class KeywordResponse(BaseModel):
     last_crawled_at: Optional[datetime]
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContactInfo(BaseModel):
@@ -41,8 +40,7 @@ class DomainContactResponse(BaseModel):
     is_verified: bool
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CrawlStats(BaseModel):

@@ -15,7 +15,8 @@ from loguru import logger
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.database import SessionLocal, SearchResult, CrawlLog, DomainContact
+from config.settings import settings
+from models.database import SessionLocal, SearchResult, CrawlLog, DomainContact, Contact, ContactType
 from services.crawler_service import CrawlerService
 from services.extraction_service import ExtractionService
 
@@ -53,7 +54,75 @@ def _snapshot_stats(hours: int = 24) -> dict:
         db.close()
 
 
-async def run_smoke(limit: int):
+def _save_smoke_result_to_db(url: str, crawl_data: dict, contacts) -> None:
+    """Persist smoke run result into crawl_logs/domain_contacts/contacts."""
+    db = SessionLocal()
+    try:
+        search_result = db.query(SearchResult).filter(SearchResult.url == url).order_by(SearchResult.id.desc()).first()
+        if not search_result:
+            # Smoke can run on urls that are not tied to existing search rows.
+            return
+
+        crawl_log = CrawlLog(
+            domain=crawl_data.get("domain") or urlparse(url).netloc,
+            url=url,
+            status_code=200,
+            pages_crawled=crawl_data.get("pages_crawled", 0),
+            duration_seconds=int(crawl_data.get("duration", 0)),
+            error_message=(crawl_data.get("zero_page_reason") if crawl_data.get("pages_crawled", 0) == 0 else None),
+        )
+        db.add(crawl_log)
+
+        contacts_data = {
+            "emails": contacts.emails,
+            "telegram": contacts.telegram_links,
+            "linkedin": contacts.linkedin_links,
+            "phones": contacts.phone_numbers if hasattr(contacts, "phone_numbers") else [],
+            "social": contacts.social_links if hasattr(contacts, "social_links") else {},
+        }
+
+        domain_contact = DomainContact(
+            search_result_id=search_result.id,
+            domain=urlparse(url).netloc,
+            tags=["smoke-benchmark"],
+            contacts_json=contacts_data,
+            confidence_score=0,
+            extraction_method="llm" if settings.USE_LLM_EXTRACTION else "regex",
+        )
+        db.add(domain_contact)
+        db.flush()
+
+        def add_contact(contact_type: ContactType, value: str):
+            db.add(Contact(domain_contact_id=domain_contact.id, contact_type=contact_type, value=value))
+
+        for email in contacts.emails:
+            add_contact(ContactType.EMAIL, email)
+        for tg in contacts.telegram_links:
+            add_contact(ContactType.TELEGRAM, tg)
+        for li in contacts.linkedin_links:
+            add_contact(ContactType.LINKEDIN, li)
+        social_map = {
+            "x": ContactType.X,
+            "facebook": ContactType.FACEBOOK,
+            "instagram": ContactType.INSTAGRAM,
+            "youtube": ContactType.YOUTUBE,
+        }
+        for platform, links in (contacts.social_links or {}).items():
+            mapped = social_map.get(platform)
+            if not mapped:
+                continue
+            for link in links:
+                add_contact(mapped, link)
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+async def run_smoke(limit: int, write_db: bool):
     db = SessionLocal()
     crawler = CrawlerService()
     extractor = ExtractionService()
@@ -93,6 +162,8 @@ async def run_smoke(limit: int):
                 bool(v) for v in (contacts.social_links or {}).values()
             ):
                 with_contacts += 1
+            if write_db:
+                _save_smoke_result_to_db(url, crawl_data, contacts)
             logger.info(f"[{processed}/{len(urls)}] {urlparse(url).netloc} done")
         except Exception as e:
             failures += 1
@@ -105,6 +176,7 @@ async def run_smoke(limit: int):
     print(json.dumps({
         "sample_size": len(urls),
         "processed": processed,
+        "write_db": write_db,
         "with_contacts": with_contacts,
         "with_contacts_rate": round((with_contacts / processed * 100), 2) if processed else 0.0,
         "zero_page_in_run": zero_page,
@@ -116,6 +188,7 @@ async def run_smoke(limit: int):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run 10-20 domain smoke quality test")
     parser.add_argument("--limit", type=int, default=15, help="Number of domains to test (10-20 recommended)")
+    parser.add_argument("--write-db", action="store_true", help="Persist smoke results to crawl_logs/domain_contacts/contacts")
     args = parser.parse_args()
     capped = max(1, min(args.limit, 20))
-    asyncio.run(run_smoke(capped))
+    asyncio.run(run_smoke(capped, args.write_db))

@@ -185,6 +185,24 @@ class ContactMiningPipeline:
                 logger.warning(
                     f"⚠️ High zero-page crawl rate: {zero_page_crawls} domains in last 24h with pages_crawled=0"
                 )
+            timeout_rate = stats.get('timeout_rate_24h', 0.0)
+            if timeout_rate >= settings.TIMEOUT_RATE_ALERT_THRESHOLD_PCT:
+                logger.warning(
+                    f"⚠️ High timeout rate: {timeout_rate}% in last 24h "
+                    f"(threshold={settings.TIMEOUT_RATE_ALERT_THRESHOLD_PCT}%)"
+                )
+            contacts_rate = stats.get('domains_with_contacts_rate_24h', 0.0)
+            if contacts_rate <= settings.CONTACTS_RATE_ALERT_THRESHOLD_PCT:
+                logger.warning(
+                    f"⚠️ Low contacts yield: {contacts_rate}% domains with contacts in last 24h "
+                    f"(threshold={settings.CONTACTS_RATE_ALERT_THRESHOLD_PCT}%)"
+                )
+            avg_contacts_per_domain = stats.get('avg_contacts_per_domain_24h', 0.0)
+            if avg_contacts_per_domain <= settings.AVG_CONTACTS_PER_DOMAIN_ALERT_THRESHOLD:
+                logger.warning(
+                    f"⚠️ Low contact density: avg={avg_contacts_per_domain} contacts/domain in last 24h "
+                    f"(threshold={settings.AVG_CONTACTS_PER_DOMAIN_ALERT_THRESHOLD})"
+                )
             
             # Log progress every 30 seconds
             logger.info(
@@ -193,7 +211,9 @@ class ContactMiningPipeline:
                 f"{stats.get('completed', 0)} completed | "
                 f"{stats.get('failed', 0)} failed | "
                 f"{stats.get('keywords_in_progress', 0)} keywords in progress | "
-                f"{stats.get('zero_page_crawls_24h', 0)} zero-page crawls/24h"
+                f"{stats.get('zero_page_crawls_24h', 0)} zero-page crawls/24h | "
+                f"{stats.get('timeout_rate_24h', 0.0)}% timeout rate/24h | "
+                f"{stats.get('domains_with_contacts_rate_24h', 0.0)}% domains with contacts/24h"
             )
             
             await asyncio.sleep(30)

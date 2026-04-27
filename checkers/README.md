@@ -36,6 +36,14 @@
   py checkers/smoke_pipeline_quality.py --limit 10 --report-file artifacts/smoke-reports/latest.json
   ```
   По умолчанию JSON-отчет сохраняется автоматически в `artifacts/smoke-reports/`.
+- **`compare_smoke_reports.py`** - Сравнение двух smoke JSON-отчетов (дельты KPI)
+  ```bash
+  # Сравнить 2 последних отчета из artifacts/smoke-reports/
+  py checkers/compare_smoke_reports.py
+
+  # Сравнить конкретные отчеты
+  py checkers/compare_smoke_reports.py --new artifacts/smoke-reports/new.json --old artifacts/smoke-reports/old.json
+  ```
 
 ## 🚀 Использование
 

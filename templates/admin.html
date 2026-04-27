@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Console - B2B Contact Miner</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #e5e7eb;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        header {
+            background: #0f172a;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #334155;
+        }
+        h1 { color: #60a5fa; font-size: 2em; }
+        .menu { display: flex; gap: 10px; flex-wrap: wrap; }
+        .menu a {
+            color: #e5e7eb;
+            text-decoration: none;
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.95em;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 18px;
+        }
+        .card h3 { color: #93c5fd; margin-bottom: 8px; font-size: 1em; }
+        .value { font-size: 1.8em; font-weight: bold; color: #f8fafc; }
+        .panel {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+        .panel h2 { color: #93c5fd; margin-bottom: 12px; font-size: 1.2em; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; border-bottom: 1px solid #1e293b; text-align: left; font-size: 0.92em; }
+        th { color: #cbd5e1; }
+        .muted { color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛠️ Admin Console</h1>
+            <div class="menu">
+                <a href="{{ url_for('user_workspace') }}">User Workspace</a>
+                <a href="{{ url_for('health_check_page') }}">Health UI</a>
+                <a href="/metrics/pipeline" target="_blank">/metrics/pipeline</a>
+                <a href="{{ url_for('api_docs_page') }}">API Docs</a>
+            </div>
+        </header>
+
+        <div class="cards">
+            <div class="card"><h3>Total Tasks</h3><div class="value">{{ total_tasks }}</div></div>
+            <div class="card"><h3>Pending</h3><div class="value">{{ task_stats.get('pending', 0) }}</div></div>
+            <div class="card"><h3>Running</h3><div class="value">{{ task_stats.get('running', 0) }}</div></div>
+            <div class="card"><h3>Failed</h3><div class="value">{{ task_stats.get('failed', 0) }}</div></div>
+            <div class="card"><h3>Stale Tasks</h3><div class="value">{{ stale_tasks|length }}</div></div>
+        </div>
+
+        <div class="panel">
+            <h2>🔄 Running Tasks</h2>
+            {% if running_tasks %}
+            <table>
+                <thead><tr><th>ID</th><th>Type</th><th>Worker</th><th>Locked At</th><th>Retry</th></tr></thead>
+                <tbody>
+                {% for t in running_tasks %}
+                    <tr>
+                        <td>{{ t.id }}</td>
+                        <td>{{ t.task_type }}</td>
+                        <td>{{ t.locked_by or '-' }}</td>
+                        <td>{{ t.locked_at.strftime('%d.%m.%Y %H:%M:%S') if t.locked_at else '-' }}</td>
+                        <td>{{ t.retry_count }}/{{ t.max_retries }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="muted">Нет активных running-задач.</div>
+            {% endif %}
+        </div>
+
+        <div class="panel">
+            <h2>🚨 Failed Tasks (Top 10)</h2>
+            {% if failed_tasks %}
+            <table>
+                <thead><tr><th>ID</th><th>Type</th><th>Error</th><th>Created</th></tr></thead>
+                <tbody>
+                {% for t in failed_tasks %}
+                    <tr>
+                        <td>{{ t.id }}</td>
+                        <td>{{ t.task_type }}</td>
+                        <td>{{ (t.error_message or '-')[:120] }}</td>
+                        <td>{{ t.created_at.strftime('%d.%m.%Y %H:%M:%S') if t.created_at else '-' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="muted">Нет failed-задач.</div>
+            {% endif %}
+        </div>
+
+        <div class="panel">
+            <h2>⏱️ Stale Tasks</h2>
+            {% if stale_tasks %}
+            <table>
+                <thead><tr><th>ID</th><th>Type</th><th>Worker</th><th>Locked At</th></tr></thead>
+                <tbody>
+                {% for t in stale_tasks %}
+                    <tr>
+                        <td>{{ t.id }}</td>
+                        <td>{{ t.task_type }}</td>
+                        <td>{{ t.locked_by or '-' }}</td>
+                        <td>{{ t.locked_at.strftime('%d.%m.%Y %H:%M:%S') if t.locked_at else '-' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="muted">Зависших задач не обнаружено.</div>
+            {% endif %}
+        </div>
+
+        <div class="panel">
+            <h2>📈 Latest Pipeline Runs</h2>
+            {% if latest_runs %}
+            <table>
+                <thead><tr><th>Run ID</th><th>Status</th><th>Progress</th><th>Websites</th><th>Contacts</th><th>Updated</th></tr></thead>
+                <tbody>
+                {% for r in latest_runs %}
+                    <tr>
+                        <td>{{ r.run_id }}</td>
+                        <td>{{ r.status }}</td>
+                        <td>{{ r.progress_percent }}%</td>
+                        <td>{{ r.websites_processed }}</td>
+                        <td>{{ r.contacts_found }}</td>
+                        <td>{{ r.updated_at.strftime('%d.%m.%Y %H:%M:%S') if r.updated_at else '-' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="muted">Запусков пока нет.</div>
+            {% endif %}
+        </div>
+
+        <div class="panel">
+            <h2>🪵 Recent Crawl Errors</h2>
+            {% if recent_crawl_errors %}
+            <table>
+                <thead><tr><th>Domain</th><th>URL</th><th>Error</th><th>Time</th></tr></thead>
+                <tbody>
+                {% for e in recent_crawl_errors %}
+                    <tr>
+                        <td>{{ e.domain }}</td>
+                        <td>{{ (e.url or '-')[:80] }}</td>
+                        <td>{{ (e.error_message or '-')[:120] }}</td>
+                        <td>{{ e.crawled_at.strftime('%d.%m.%Y %H:%M:%S') if e.crawled_at else '-' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="muted">Ошибок crawl не найдено.</div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

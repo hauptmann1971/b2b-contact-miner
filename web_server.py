@@ -12,6 +12,7 @@ import re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from models.database import SessionLocal, Keyword, SearchResult, DomainContact, Contact, CrawlLog, PipelineState, init_db
+from models.task_queue import TaskQueue
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
@@ -60,88 +61,149 @@ def get_db():
 
 @app.route('/')
 def index():
-    """Главная страница с формой ввода ключевых слов и статистикой"""
+    """User workspace landing page."""
+    return user_workspace()
+
+
+def _build_user_dashboard_context(db):
+    """Collect data for user-facing dashboard."""
+    # Получаем статистику
+    total_keywords = db.query(Keyword).count()
+    processed_keywords = db.query(Keyword).filter(Keyword.is_processed == True).count()
+    total_domains = db.query(DomainContact).count()
+    total_contacts = db.query(Contact).count()
+    
+    # Последние ключевые слова
+    recent_keywords = db.query(Keyword).order_by(desc(Keyword.created_at)).limit(10).all()
+    recent_runs = db.query(PipelineState).order_by(desc(PipelineState.started_at)).limit(10).all()
+    recent_domains = db.query(DomainContact).filter(
+        DomainContact.contacts_json.isnot(None)
+    ).order_by(desc(DomainContact.created_at)).limit(20).all()
+    recent_contact_rows = []
+    for domain_item in recent_domains:
+        payload = domain_item.contacts_json or {}
+        if not isinstance(payload, dict):
+            continue
+
+        for email in (payload.get('emails') or [])[:2]:
+            recent_contact_rows.append({
+                'contact_type': 'email',
+                'value': email,
+                'domain': domain_item.domain,
+                'created_at': domain_item.created_at
+            })
+        for tg in (payload.get('telegram') or [])[:2]:
+            recent_contact_rows.append({
+                'contact_type': 'telegram',
+                'value': tg,
+                'domain': domain_item.domain,
+                'created_at': domain_item.created_at
+            })
+        for li in (payload.get('linkedin') or [])[:2]:
+            recent_contact_rows.append({
+                'contact_type': 'linkedin',
+                'value': li,
+                'domain': domain_item.domain,
+                'created_at': domain_item.created_at
+            })
+        social_payload = payload.get('social') or {}
+        if isinstance(social_payload, dict):
+            for social_type, links in social_payload.items():
+                for link in (links or [])[:1]:
+                    recent_contact_rows.append({
+                        'contact_type': social_type,
+                        'value': link,
+                        'domain': domain_item.domain,
+                        'created_at': domain_item.created_at
+                    })
+        if len(recent_contact_rows) >= 20:
+            break
+
+    recent_contacts = recent_contact_rows[:20]
+    
+    # Статистика по типам контактов
+    email_count = db.query(Contact).filter(Contact.contact_type == 'email').count()
+    telegram_count = db.query(Contact).filter(Contact.contact_type == 'telegram').count()
+    linkedin_count = db.query(Contact).filter(Contact.contact_type == 'linkedin').count()
+    phone_count = db.query(Contact).filter(Contact.contact_type == 'phone').count()
+
+    db_languages = [row[0] for row in db.query(Keyword.language).distinct().all() if row[0]]
+    db_countries = [row[0] for row in db.query(Keyword.country).distinct().all() if row[0]]
+    language_options = sorted(set(DEFAULT_LANGUAGES + db_languages))
+    country_options = sorted(set(DEFAULT_COUNTRIES + db_countries))
+
+    return {
+        "total_keywords": total_keywords,
+        "processed_keywords": processed_keywords,
+        "total_domains": total_domains,
+        "total_contacts": total_contacts,
+        "recent_keywords": recent_keywords,
+        "email_count": email_count,
+        "telegram_count": telegram_count,
+        "linkedin_count": linkedin_count,
+        "phone_count": phone_count,
+        "recent_runs": recent_runs,
+        "recent_contacts": recent_contacts,
+        "language_options": language_options,
+        "country_options": country_options,
+    }
+
+
+@app.route('/user')
+def user_workspace():
+    """Отдельная user-страница (ввод, результаты, экспорт)."""
     db = SessionLocal()
     try:
-        # Получаем статистику
-        total_keywords = db.query(Keyword).count()
-        processed_keywords = db.query(Keyword).filter(Keyword.is_processed == True).count()
-        total_domains = db.query(DomainContact).count()
-        total_contacts = db.query(Contact).count()
+        return render_template('index.html', **_build_user_dashboard_context(db))
+    finally:
+        db.close()
+
+
+@app.route('/admin')
+def admin_dashboard():
+    """Отдельная admin-страница (мониторинг системы и воркеров)."""
+    db = SessionLocal()
+    try:
+        task_stats_rows = db.query(
+            TaskQueue.status,
+            func.count(TaskQueue.id)
+        ).group_by(TaskQueue.status).all()
+        task_stats = {status: count for status, count in task_stats_rows}
+        total_tasks = sum(task_stats.values())
         
-        # Последние ключевые слова
-        recent_keywords = db.query(Keyword).order_by(desc(Keyword.created_at)).limit(10).all()
-        recent_runs = db.query(PipelineState).order_by(desc(PipelineState.started_at)).limit(10).all()
-        recent_domains = db.query(DomainContact).filter(
-            DomainContact.contacts_json.isnot(None)
-        ).order_by(desc(DomainContact.created_at)).limit(20).all()
-        recent_contact_rows = []
-        for domain_item in recent_domains:
-            payload = domain_item.contacts_json or {}
-            if not isinstance(payload, dict):
+        from config.settings import settings
+        now_ts = datetime.now(timezone.utc).timestamp()
+        stale_tasks = []
+        running_tasks = db.query(TaskQueue).filter(
+            TaskQueue.status == 'running',
+            TaskQueue.locked_at.isnot(None)
+        ).order_by(desc(TaskQueue.locked_at)).all()
+        for task in running_tasks:
+            try:
+                if task.locked_at and task.locked_at.timestamp() < (now_ts - settings.TASK_LOCK_TIMEOUT):
+                    stale_tasks.append(task)
+            except Exception:
                 continue
 
-            for email in (payload.get('emails') or [])[:2]:
-                recent_contact_rows.append({
-                    'contact_type': 'email',
-                    'value': email,
-                    'domain': domain_item.domain,
-                    'created_at': domain_item.created_at
-                })
-            for tg in (payload.get('telegram') or [])[:2]:
-                recent_contact_rows.append({
-                    'contact_type': 'telegram',
-                    'value': tg,
-                    'domain': domain_item.domain,
-                    'created_at': domain_item.created_at
-                })
-            for li in (payload.get('linkedin') or [])[:2]:
-                recent_contact_rows.append({
-                    'contact_type': 'linkedin',
-                    'value': li,
-                    'domain': domain_item.domain,
-                    'created_at': domain_item.created_at
-                })
-            social_payload = payload.get('social') or {}
-            if isinstance(social_payload, dict):
-                for social_type, links in social_payload.items():
-                    for link in (links or [])[:1]:
-                        recent_contact_rows.append({
-                            'contact_type': social_type,
-                            'value': link,
-                            'domain': domain_item.domain,
-                            'created_at': domain_item.created_at
-                        })
-            if len(recent_contact_rows) >= 20:
-                break
+        failed_tasks = db.query(TaskQueue).filter(
+            TaskQueue.status == 'failed'
+        ).order_by(desc(TaskQueue.created_at)).limit(10).all()
 
-        recent_contacts = recent_contact_rows[:20]
-        
-        # Статистика по типам контактов
-        email_count = db.query(Contact).filter(Contact.contact_type == 'email').count()
-        telegram_count = db.query(Contact).filter(Contact.contact_type == 'telegram').count()
-        linkedin_count = db.query(Contact).filter(Contact.contact_type == 'linkedin').count()
-        phone_count = db.query(Contact).filter(Contact.contact_type == 'phone').count()
+        latest_runs = db.query(PipelineState).order_by(desc(PipelineState.started_at)).limit(10).all()
+        recent_crawl_errors = db.query(CrawlLog).filter(
+            CrawlLog.error_message.isnot(None)
+        ).order_by(desc(CrawlLog.crawled_at)).limit(10).all()
 
-        db_languages = [row[0] for row in db.query(Keyword.language).distinct().all() if row[0]]
-        db_countries = [row[0] for row in db.query(Keyword.country).distinct().all() if row[0]]
-        language_options = sorted(set(DEFAULT_LANGUAGES + db_languages))
-        country_options = sorted(set(DEFAULT_COUNTRIES + db_countries))
-        
-        return render_template('index.html',
-                             total_keywords=total_keywords,
-                             processed_keywords=processed_keywords,
-                             total_domains=total_domains,
-                             total_contacts=total_contacts,
-                             recent_keywords=recent_keywords,
-                             email_count=email_count,
-                             telegram_count=telegram_count,
-                             linkedin_count=linkedin_count,
-                             phone_count=phone_count,
-                             recent_runs=recent_runs,
-                             recent_contacts=recent_contacts,
-                             language_options=language_options,
-                             country_options=country_options)
+        return render_template(
+            'admin.html',
+            task_stats=task_stats,
+            total_tasks=total_tasks,
+            running_tasks=running_tasks[:10],
+            stale_tasks=stale_tasks[:10],
+            failed_tasks=failed_tasks,
+            latest_runs=latest_runs,
+            recent_crawl_errors=recent_crawl_errors
+        )
     finally:
         db.close()
 

@@ -44,6 +44,14 @@
   # Сравнить конкретные отчеты
   py checkers/compare_smoke_reports.py --new artifacts/smoke-reports/new.json --old artifacts/smoke-reports/old.json
   ```
+- **`run_weekly_smoke.py`** - Запустить smoke и сразу сравнить с предыдущим отчетом
+  ```bash
+  # Weekly smoke (без записи в БД)
+  py checkers/run_weekly_smoke.py --limit 15
+
+  # Weekly smoke с записью в БД
+  py checkers/run_weekly_smoke.py --limit 15 --write-db
+  ```
 
 ## 🚀 Использование
 

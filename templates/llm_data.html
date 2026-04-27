@@ -36,6 +36,7 @@
             gap: 15px;
             justify-content: center;
             margin-bottom: 30px;
+            flex-wrap: wrap;
         }
         
         .btn {
@@ -55,6 +56,34 @@
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .token-box {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .token-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .token-row input {
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .token-hint {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 8px;
         }
         
         .section {
@@ -178,6 +207,14 @@
             <a href="/health-check" class="btn">💚 Health Check</a>
             <button class="btn" onclick="loadData()">🔄 Обновить</button>
         </div>
+
+        <div class="token-box">
+            <div class="token-row">
+                <input type="password" id="apiTokenInput" placeholder="Введите LLM_DATA_API_TOKEN для доступа к данным">
+                <button class="btn" onclick="saveToken()">💾 Сохранить токен</button>
+            </div>
+            <div class="token-hint">Токен хранится только в браузере (localStorage) и отправляется как заголовок <code>X-API-Key</code>.</div>
+        </div>
         
         <!-- Statistics -->
         <div class="section">
@@ -262,9 +299,36 @@
     </div>
     
     <script>
+        function saveToken() {
+            const tokenInput = document.getElementById('apiTokenInput');
+            const value = (tokenInput.value || '').trim();
+            if (value) {
+                localStorage.setItem('llmDataApiToken', value);
+                alert('Токен сохранен локально в браузере.');
+            } else {
+                localStorage.removeItem('llmDataApiToken');
+                alert('Токен очищен.');
+            }
+        }
+
+        function loadSavedToken() {
+            const tokenInput = document.getElementById('apiTokenInput');
+            const saved = localStorage.getItem('llmDataApiToken') || '';
+            tokenInput.value = saved;
+        }
+
         async function loadData() {
             try {
-                const response = await fetch('/api/llm-data');
+                const token = (document.getElementById('apiTokenInput').value || '').trim();
+                const response = await fetch('/api/llm-data', {
+                    headers: token ? { 'X-API-Key': token } : {}
+                });
+                if (response.status === 401) {
+                    throw new Error('Unauthorized (401). Укажите корректный LLM_DATA_API_TOKEN.');
+                }
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const data = await response.json();
                 
                 // Update stats
@@ -334,7 +398,10 @@
                 
             } catch (error) {
                 console.error('Error loading data:', error);
-                alert('Ошибка загрузки данных: ' + error.message);
+                const msg = 'Ошибка загрузки данных: ' + error.message;
+                document.getElementById('searchResultsTable').innerHTML = `<tr><td colspan="5" class="empty-state">${msg}</td></tr>`;
+                document.getElementById('crawlLogsTable').innerHTML = `<tr><td colspan="5" class="empty-state">${msg}</td></tr>`;
+                document.getElementById('contactsJsonTable').innerHTML = `<tr><td colspan="6" class="empty-state">${msg}</td></tr>`;
             }
         }
         
@@ -344,6 +411,7 @@
         }
         
         // Load data on page load
+        loadSavedToken();
         loadData();
     </script>
 </body>

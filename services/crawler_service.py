@@ -52,6 +52,8 @@ class CrawlerService:
         start_time = time.time()
         pages_crawled = 0
         all_content = []
+        failed_attempts = 0
+        zero_page_reason = None
         
         async with async_playwright() as p:
             browser = await p.chromium.launch(
@@ -65,6 +67,11 @@ class CrawlerService:
                     viewport={'width': 1920, 'height': 1080},
                     ignore_https_errors=True
                 )
+                if settings.BLOCK_HEAVY_RESOURCES:
+                    await context.route(
+                        "**/*",
+                        lambda route: route.abort() if route.request.resource_type in {"image", "media", "font"} else route.continue_()
+                    )
                 
                 page = await context.new_page()
                 
@@ -80,6 +87,7 @@ class CrawlerService:
                         elapsed_time = time.time() - start_time
                         if elapsed_time > settings.DOMAIN_CRAWL_TIMEOUT:
                             logger.warning(f"Domain crawl timeout for {domain} after {elapsed_time:.0f}s ({pages_crawled} pages)")
+                            zero_page_reason = "domain_timeout"
                             break
                         
                         prioritized_link = pages_to_crawl.pop(0)
@@ -115,6 +123,8 @@ class CrawlerService:
                                 await asyncio.sleep(settings.DELAY_BETWEEN_REQUESTS)
                                 
                             except Exception as e:
+                                failed_attempts += 1
+                                zero_page_reason = f"page_error:{type(e).__name__}"
                                 logger.warning(f"Failed to crawl {prioritized_link.url}: {e}")
                                 continue
                 finally:
@@ -129,13 +139,18 @@ class CrawlerService:
         
         logger.info(f"Completed crawl for {domain}: {pages_crawled} pages in {duration:.2f}s")
         if pages_crawled == 0:
-            logger.warning(f"No pages crawled for {domain}; likely timeout/blocked or invalid entry URL")
+            reason = zero_page_reason or "blocked_or_invalid_entry_url"
+            logger.warning(
+                f"No pages crawled for {domain}; reason={reason}, failed_attempts={failed_attempts}, "
+                f"crawl_timeout={settings.DOMAIN_CRAWL_TIMEOUT}s"
+            )
         
         return {
             "domain": domain,
             "pages_crawled": pages_crawled,
             "content": all_content,
             "duration": duration,
+            "zero_page_reason": zero_page_reason,
             "skipped": False
         }
     
@@ -193,7 +208,11 @@ class CrawlerService:
                 await page.goto(url, timeout=self.timeout, wait_until="networkidle")
             except Exception:
                 # Some sites never reach "networkidle" due to trackers/streams; fallback to DOM ready.
-                await page.goto(url, timeout=self.timeout, wait_until="domcontentloaded")
+                await page.goto(
+                    url,
+                    timeout=settings.REQUEST_TIMEOUT_FALLBACK * 1000,
+                    wait_until="domcontentloaded"
+                )
             await asyncio.sleep(1)
             
             text_content = await page.inner_text("body")
@@ -332,6 +351,7 @@ class CrawlerService:
         all_content = []
         pages_crawled = 0
         start_time = time.time()
+        failed_attempts = 0
         
         async with async_playwright() as p:
             browser = await p.chromium.launch(
@@ -345,6 +365,11 @@ class CrawlerService:
                     viewport={'width': 1920, 'height': 1080},
                     ignore_https_errors=True
                 )
+                if settings.BLOCK_HEAVY_RESOURCES:
+                    await context.route(
+                        "**/*",
+                        lambda route: route.abort() if route.request.resource_type in {"image", "media", "font"} else route.continue_()
+                    )
                 
                 page = await context.new_page()
                 
@@ -368,6 +393,7 @@ class CrawlerService:
                             await asyncio.sleep(0.3)  # Short delay between pages
                             
                         except Exception as e:
+                            failed_attempts += 1
                             logger.warning(f"Failed to crawl contact page {full_url}: {e}")
                             continue
                 finally:
@@ -378,11 +404,14 @@ class CrawlerService:
         
         duration = time.time() - start_time
         logger.info(f"Completed fast crawl for {domain}: {pages_crawled} contact pages in {duration:.2f}s")
+        zero_page_reason = "all_contact_pages_failed" if pages_crawled == 0 and contact_page_paths else None
         
         return {
             "domain": domain,
             "pages_crawled": pages_crawled,
             "content": all_content,
             "duration": duration,
+            "failed_attempts": failed_attempts,
+            "zero_page_reason": zero_page_reason,
             "skipped": False
         }

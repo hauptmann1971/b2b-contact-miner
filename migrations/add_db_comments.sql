@@ -47,7 +47,7 @@ ALTER TABLE `domain_contacts`
 ALTER TABLE `contacts` 
     MODIFY COLUMN `id` INT COMMENT 'Unique identifier',
     MODIFY COLUMN `domain_contact_id` INT COMMENT 'Foreign key to domain_contacts table',
-    MODIFY COLUMN `contact_type` ENUM('email','telegram','linkedin','phone') COMMENT 'Type: email, telegram, linkedin, phone',
+    MODIFY COLUMN `contact_type` ENUM('email','telegram','linkedin','phone','x','facebook','instagram','youtube') COMMENT 'Type: email, telegram, linkedin, phone, x, facebook, instagram, youtube',
     MODIFY COLUMN `value` VARCHAR(500) COMMENT 'Contact value (email address, phone number, etc.)',
     MODIFY COLUMN `is_verified` BOOLEAN COMMENT 'True if contact has been verified',
     MODIFY COLUMN `verification_date` DATETIME COMMENT 'Date of last verification',

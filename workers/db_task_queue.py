@@ -645,6 +645,8 @@ class DatabaseTaskQueue:
         """Get queue statistics with keyword breakdown"""
         try:
             db = SessionLocal()
+            now = datetime.now(timezone.utc)
+            day_ago = now - timedelta(hours=24)
             stats = {
                 'pending': db.query(TaskQueue).filter(TaskQueue.status == 'pending').count(),
                 'running': db.query(TaskQueue).filter(TaskQueue.status == 'running').count(),
@@ -661,10 +663,32 @@ class DatabaseTaskQueue:
             ).distinct().count()
             
             stats['keywords_in_progress'] = keywords_in_progress
-            stats['zero_page_crawls_24h'] = db.query(CrawlLog).filter(
-                CrawlLog.pages_crawled == 0,
-                CrawlLog.crawled_at >= (datetime.now(timezone.utc) - timedelta(hours=24))
-            ).count()
+            crawl_logs_24h = db.query(CrawlLog).filter(
+                CrawlLog.crawled_at >= day_ago
+            )
+            total_crawls_24h = crawl_logs_24h.count()
+            zero_page_crawls_24h = crawl_logs_24h.filter(CrawlLog.pages_crawled == 0).count()
+
+            contacts_24h = db.query(DomainContact).filter(
+                DomainContact.created_at >= day_ago
+            )
+            total_domains_24h = contacts_24h.count()
+            domains_with_any_social_24h = 0
+            for row in contacts_24h.with_entities(DomainContact.contacts_json).all():
+                payload = row[0] or {}
+                social = payload.get("social") if isinstance(payload, dict) else None
+                if isinstance(social, dict) and any(bool(v) for v in social.values()):
+                    domains_with_any_social_24h += 1
+
+            stats['crawls_24h'] = total_crawls_24h
+            stats['zero_page_crawls_24h'] = zero_page_crawls_24h
+            stats['crawl_success_rate_24h'] = round(
+                ((total_crawls_24h - zero_page_crawls_24h) / total_crawls_24h) * 100, 2
+            ) if total_crawls_24h else 100.0
+            stats['domains_with_social_24h'] = domains_with_any_social_24h
+            stats['social_coverage_rate_24h'] = round(
+                (domains_with_any_social_24h / total_domains_24h) * 100, 2
+            ) if total_domains_24h else 0.0
             
             return stats
         except Exception as e:

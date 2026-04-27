@@ -104,7 +104,7 @@ class Contact(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
     domain_contact_id = Column(Integer, ForeignKey("domain_contacts.id"), nullable=False, comment="Foreign key to domain_contacts table")
-    contact_type = Column(Enum(ContactType), nullable=False, comment="Type: email, telegram, linkedin, phone")
+    contact_type = Column(Enum(ContactType), nullable=False, comment="Type: email, telegram, linkedin, phone, x, facebook, instagram, youtube")
     value = Column(String(500), nullable=False, index=True, comment="Contact value (email address, phone number, etc.)")
     is_verified = Column(Boolean, default=False, comment="True if contact has been verified")
     verification_date = Column(DateTime, nullable=True, comment="Date of last verification")

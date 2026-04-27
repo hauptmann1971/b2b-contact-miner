@@ -45,6 +45,8 @@ class ContactMiningPipeline:
     
     async def initialize(self):
         """Initialize async components"""
+        self._run_preflight_checks()
+
         # Initialize database-backed task queue
         self.task_queue = DatabaseTaskQueue(max_concurrent=settings.MAX_CONCURRENT_DOMAINS)
         await self.task_queue.start_workers()
@@ -56,6 +58,36 @@ class ContactMiningPipeline:
             logger.info("Healthcheck API initialized with database task queue")
         except Exception as e:
             logger.warning(f"Failed to initialize healthcheck API: {e}")
+
+    def _run_preflight_checks(self):
+        """Validate critical external dependencies before queue startup."""
+        try:
+            # SERP configuration sanity
+            provider = settings.SERP_API_PROVIDER
+            if provider == "serpapi" and not settings.SERPAPI_KEY:
+                logger.warning("Preflight: SERP provider is serpapi but SERPAPI_KEY is empty")
+            elif provider == "duckduckgo":
+                logger.info("Preflight: using DuckDuckGo provider (no API key required)")
+
+            # LLM fallback readiness
+            if settings.USE_LLM_EXTRACTION:
+                llm_ready = False
+                if settings.USE_YANDEXGPT:
+                    llm_ready = bool(settings.YANDEX_IAM_TOKEN and settings.YANDEX_FOLDER_ID)
+                    if not llm_ready:
+                        logger.warning("Preflight: USE_YANDEXGPT=true but IAM/FOLDER config is incomplete")
+                    elif settings.YANDEX_IAM_TOKEN.startswith("t1."):
+                        logger.info("Preflight: YandexGPT token format looks valid")
+
+                if settings.USE_DEEPSEEK and settings.DEEPSEEK_API_KEY:
+                    llm_ready = True
+                if settings.USE_OPENAI and settings.OPENAI_API_KEY:
+                    llm_ready = True
+
+                if not llm_ready:
+                    logger.warning("Preflight: no ready LLM provider configured; fallback extraction may be disabled")
+        except Exception as e:
+            logger.warning(f"Preflight checks failed with non-fatal error: {e}")
     
     async def shutdown(self):
         """Cleanup resources"""

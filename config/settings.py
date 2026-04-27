@@ -32,9 +32,11 @@ class Settings(BaseSettings):
     # Crawler Settings
     MAX_PAGES_PER_DOMAIN: int = 3  # Reduced for speed
     REQUEST_TIMEOUT: int = 15  # Reduced from 30s for faster crawling
+    REQUEST_TIMEOUT_FALLBACK: int = 20  # Fallback timeout for domcontentloaded strategy
     DOMAIN_CRAWL_TIMEOUT: int = 45  # Max seconds to crawl entire domain (prevents hanging)
     CONCURRENT_BROWSERS: int = 3  # Reduced from 5
     HEADLESS_BROWSER: bool = True
+    BLOCK_HEAVY_RESOURCES: bool = True
     MAX_CONCURRENT_DOMAINS_PER_SITE: int = 3  # Reduced from 5
     
     # Rate Limiting

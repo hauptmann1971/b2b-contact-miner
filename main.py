@@ -15,6 +15,9 @@ import time
 from urllib.parse import urlparse
 import sys
 import traceback
+import os
+import re
+import requests
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Configure logging
@@ -73,6 +76,8 @@ class ContactMiningPipeline:
             if settings.USE_LLM_EXTRACTION:
                 llm_ready = False
                 if settings.USE_YANDEXGPT:
+                    if settings.AUTO_REFRESH_YANDEX_IAM_BEFORE_RUN:
+                        self._refresh_yandex_iam_token()
                     llm_ready = bool(settings.YANDEX_IAM_TOKEN and settings.YANDEX_FOLDER_ID)
                     if not llm_ready:
                         logger.warning("Preflight: USE_YANDEXGPT=true but IAM/FOLDER config is incomplete")
@@ -85,9 +90,66 @@ class ContactMiningPipeline:
                     llm_ready = True
 
                 if not llm_ready:
-                    logger.warning("Preflight: no ready LLM provider configured; fallback extraction may be disabled")
+                    msg = "Preflight: no ready LLM provider configured; fallback extraction may be disabled"
+                    if settings.ENFORCE_LLM_READY:
+                        raise RuntimeError(f"{msg}. Set ENFORCE_LLM_READY=false to bypass.")
+                    logger.warning(msg)
         except Exception as e:
+            if settings.ENFORCE_LLM_READY:
+                raise
             logger.warning(f"Preflight checks failed with non-fatal error: {e}")
+
+    def _refresh_yandex_iam_token(self):
+        """Refresh Yandex IAM token from OAuth token before pipeline start."""
+        oauth_token = (settings.YANDEX_OAUTH_TOKEN or os.getenv("YANDEX_OAUTH_TOKEN", "")).strip()
+        if not oauth_token:
+            logger.warning("Preflight: AUTO_REFRESH_YANDEX_IAM_BEFORE_RUN=true but YANDEX_OAUTH_TOKEN is empty")
+            return
+
+        try:
+            response = requests.post(
+                "https://iam.api.cloud.yandex.net/iam/v1/tokens",
+                headers={"Content-Type": "application/json"},
+                json={"yandexPassportOauthToken": oauth_token},
+                timeout=20,
+            )
+            response.raise_for_status()
+            iam_token = (response.json().get("iamToken") or "").strip()
+            if not iam_token:
+                raise RuntimeError("IAM response does not include iamToken")
+
+            settings.YANDEX_IAM_TOKEN = iam_token
+            os.environ["YANDEX_IAM_TOKEN"] = iam_token
+            logger.info("Preflight: Yandex IAM token was refreshed from OAuth token")
+
+            if settings.PERSIST_REFRESHED_YANDEX_IAM_TO_ENV:
+                self._persist_env_var("YANDEX_IAM_TOKEN", iam_token)
+        except Exception as e:
+            if settings.ENFORCE_LLM_READY:
+                raise RuntimeError(f"Failed to refresh Yandex IAM token: {e}") from e
+            logger.warning(f"Preflight: failed to refresh Yandex IAM token: {e}")
+
+    def _persist_env_var(self, key: str, value: str):
+        """Persist env value to .env to survive process restarts."""
+        env_path = os.path.join(os.getcwd(), ".env")
+        if not os.path.exists(env_path):
+            logger.warning("Preflight: .env file not found, skipping token persistence")
+            return
+
+        with open(env_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        pattern = re.compile(rf"^{re.escape(key)}=.*$", re.MULTILINE)
+        replacement = f"{key}={value}"
+        if pattern.search(content):
+            updated = pattern.sub(replacement, content)
+        else:
+            suffix = "" if content.endswith("\n") else "\n"
+            updated = f"{content}{suffix}{replacement}\n"
+
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.write(updated)
+        logger.info(f"Preflight: persisted refreshed {key} to .env")
     
     async def shutdown(self):
         """Cleanup resources"""

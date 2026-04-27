@@ -24,8 +24,12 @@ class Settings(BaseSettings):
     USE_DEEPSEEK: bool = False
     
     YANDEX_IAM_TOKEN: str = ""
+    YANDEX_OAUTH_TOKEN: str = ""
     YANDEX_FOLDER_ID: str = ""
     USE_YANDEXGPT: bool = True
+    AUTO_REFRESH_YANDEX_IAM_BEFORE_RUN: bool = False
+    PERSIST_REFRESHED_YANDEX_IAM_TO_ENV: bool = False
+    ENFORCE_LLM_READY: bool = False
     
     USE_LLM_EXTRACTION: bool = True
     

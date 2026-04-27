@@ -6,6 +6,7 @@ import os
 import secrets
 import json
 import logging
+import re
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -15,6 +16,37 @@ from models.database import SessionLocal, Keyword, SearchResult, DomainContact, 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
 logger = logging.getLogger(__name__)
+
+DEFAULT_LANGUAGES = ['ru', 'en', 'kk', 'uz', 'ky', 'tg', 'az', 'hy', 'ka', 'be', 'ro', 'de', 'fr']
+DEFAULT_COUNTRIES = ['RU', 'KZ', 'UZ', 'KG', 'TJ', 'TM', 'AZ', 'AM', 'GE', 'BY', 'MD', 'UA', 'MN', 'AF', 'PK', 'US', 'GB', 'DE', 'FR']
+
+
+def _sanitize_keyword_text(value: str) -> str:
+    return value.replace('<', '').replace('>', '').replace('"', '').replace("'", '').strip()
+
+
+def _normalize_language(value: str, fallback: str = 'ru') -> str:
+    value = (value or '').strip().lower()
+    if re.fullmatch(r'[a-z]{2,8}', value):
+        return value
+    return fallback
+
+
+def _normalize_country(value: str, fallback: str = 'RU') -> str:
+    value = (value or '').strip().upper()
+    if re.fullmatch(r'[A-Z]{2,3}', value):
+        return value
+    return fallback
+
+
+def _resolve_locale_from_form():
+    selected_language = request.form.get('language', 'ru')
+    selected_country = request.form.get('country', 'RU')
+    custom_language = request.form.get('custom_language', '').strip()
+    custom_country = request.form.get('custom_country', '').strip()
+    language = _normalize_language(custom_language if selected_language == '__custom__' else selected_language)
+    country = _normalize_country(custom_country if selected_country == '__custom__' else selected_country)
+    return language, country
 
 
 def get_db():
@@ -39,12 +71,62 @@ def index():
         
         # Последние ключевые слова
         recent_keywords = db.query(Keyword).order_by(desc(Keyword.created_at)).limit(10).all()
+        recent_runs = db.query(PipelineState).order_by(desc(PipelineState.started_at)).limit(10).all()
+        recent_domains = db.query(DomainContact).filter(
+            DomainContact.contacts_json.isnot(None)
+        ).order_by(desc(DomainContact.created_at)).limit(20).all()
+        recent_contact_rows = []
+        for domain_item in recent_domains:
+            payload = domain_item.contacts_json or {}
+            if not isinstance(payload, dict):
+                continue
+
+            for email in (payload.get('emails') or [])[:2]:
+                recent_contact_rows.append({
+                    'contact_type': 'email',
+                    'value': email,
+                    'domain': domain_item.domain,
+                    'created_at': domain_item.created_at
+                })
+            for tg in (payload.get('telegram') or [])[:2]:
+                recent_contact_rows.append({
+                    'contact_type': 'telegram',
+                    'value': tg,
+                    'domain': domain_item.domain,
+                    'created_at': domain_item.created_at
+                })
+            for li in (payload.get('linkedin') or [])[:2]:
+                recent_contact_rows.append({
+                    'contact_type': 'linkedin',
+                    'value': li,
+                    'domain': domain_item.domain,
+                    'created_at': domain_item.created_at
+                })
+            social_payload = payload.get('social') or {}
+            if isinstance(social_payload, dict):
+                for social_type, links in social_payload.items():
+                    for link in (links or [])[:1]:
+                        recent_contact_rows.append({
+                            'contact_type': social_type,
+                            'value': link,
+                            'domain': domain_item.domain,
+                            'created_at': domain_item.created_at
+                        })
+            if len(recent_contact_rows) >= 20:
+                break
+
+        recent_contacts = recent_contact_rows[:20]
         
         # Статистика по типам контактов
         email_count = db.query(Contact).filter(Contact.contact_type == 'email').count()
         telegram_count = db.query(Contact).filter(Contact.contact_type == 'telegram').count()
         linkedin_count = db.query(Contact).filter(Contact.contact_type == 'linkedin').count()
         phone_count = db.query(Contact).filter(Contact.contact_type == 'phone').count()
+
+        db_languages = [row[0] for row in db.query(Keyword.language).distinct().all() if row[0]]
+        db_countries = [row[0] for row in db.query(Keyword.country).distinct().all() if row[0]]
+        language_options = sorted(set(DEFAULT_LANGUAGES + db_languages))
+        country_options = sorted(set(DEFAULT_COUNTRIES + db_countries))
         
         return render_template('index.html',
                              total_keywords=total_keywords,
@@ -55,7 +137,11 @@ def index():
                              email_count=email_count,
                              telegram_count=telegram_count,
                              linkedin_count=linkedin_count,
-                             phone_count=phone_count)
+                             phone_count=phone_count,
+                             recent_runs=recent_runs,
+                             recent_contacts=recent_contacts,
+                             language_options=language_options,
+                             country_options=country_options)
     finally:
         db.close()
 
@@ -64,8 +150,7 @@ def index():
 def add_keyword():
     """Добавление нового ключевого слова"""
     keyword_text = request.form.get('keyword', '').strip()
-    language = request.form.get('language', 'ru')
-    country = request.form.get('country', 'RU')
+    language, country = _resolve_locale_from_form()
     
     # Валидация входных данных
     if not keyword_text:
@@ -76,18 +161,7 @@ def add_keyword():
         flash('Ключевое слово слишком длинное (максимум 500 символов)', 'error')
         return redirect(url_for('index'))
     
-    # Санитизация - удаляем потенциально опасные символы
-    keyword_text = keyword_text.replace('<', '').replace('>', '').replace('"', '').replace("'", '')
-    
-    # Валидация языка и страны
-    valid_languages = ['ru', 'en', 'kk', 'uz', 'ky', 'tg', 'az', 'hy', 'ka', 'be', 'ro']
-    valid_countries = ['RU', 'KZ', 'UZ', 'KG', 'TJ', 'TM', 'AZ', 'AM', 'GE', 'BY', 'MD', 'UA', 'MN', 'AF', 'PK', 'US', 'GB', 'DE', 'FR']
-    
-    if language not in valid_languages:
-        language = 'ru'  # Значение по умолчанию
-    
-    if country not in valid_countries:
-        country = 'RU'  # Значение по умолчанию
+    keyword_text = _sanitize_keyword_text(keyword_text)
     
     db = SessionLocal()
     try:
@@ -115,6 +189,49 @@ def add_keyword():
         return redirect(url_for('index'))
     finally:
         db.close()
+
+
+@app.route('/add_keywords_bulk', methods=['POST'])
+def add_keywords_bulk():
+    """Bulk add keywords from textarea."""
+    bulk_keywords = request.form.get('bulk_keywords', '')
+    language, country = _resolve_locale_from_form()
+
+    rows = []
+    for line in bulk_keywords.splitlines():
+        row = _sanitize_keyword_text(line)
+        if row:
+            rows.append(row[:500])
+
+    if not rows:
+        flash('Не найдено валидных ключевых слов для массового добавления', 'error')
+        return redirect(url_for('index'))
+
+    rows = list(dict.fromkeys(rows))  # Deduplicate while preserving order
+
+    db = SessionLocal()
+    try:
+        existing = set(
+            item[0]
+            for item in db.query(Keyword.keyword).filter(Keyword.keyword.in_(rows)).all()
+        )
+        added = 0
+        skipped = 0
+        for row in rows:
+            if row in existing:
+                skipped += 1
+                continue
+            db.add(Keyword(keyword=row, language=language, country=country, is_processed=False))
+            added += 1
+        db.commit()
+        flash(f'Массовое добавление завершено: добавлено {added}, пропущено {skipped}', 'success')
+    except Exception as e:
+        db.rollback()
+        flash(f'Ошибка массового добавления: {str(e)}', 'error')
+    finally:
+        db.close()
+
+    return redirect(url_for('index'))
 
 
 @app.route('/keywords')
@@ -185,11 +302,19 @@ def contacts_list():
         page = request.args.get('page', 1, type=int)
         per_page = 50
         contact_type = request.args.get('type', '')
+        query = request.args.get('q', '').strip()
         
         contacts_query = db.query(Contact).join(DomainContact).join(SearchResult).join(Keyword)
         
         if contact_type:
             contacts_query = contacts_query.filter(Contact.contact_type == contact_type)
+        if query:
+            like_pattern = f"%{query}%"
+            contacts_query = contacts_query.filter(
+                (Contact.value.ilike(like_pattern)) |
+                (DomainContact.domain.ilike(like_pattern)) |
+                (Keyword.keyword.ilike(like_pattern))
+            )
         
         contacts_query = contacts_query.order_by(desc(Contact.created_at))
         total = contacts_query.count()
@@ -200,7 +325,8 @@ def contacts_list():
                              page=page,
                              per_page=per_page,
                              total=total,
-                             selected_type=contact_type)
+                             selected_type=contact_type,
+                             q=query)
     finally:
         db.close()
 

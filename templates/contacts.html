@@ -66,6 +66,28 @@
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
+
+        .search-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .search-row input[type="text"] {
+            flex: 1;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .search-row button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+        }
         
         .filter-btn {
             padding: 10px 20px;
@@ -165,6 +187,15 @@
         .keyword-link:hover {
             text-decoration: underline;
         }
+
+        .actions-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -175,16 +206,24 @@
         </header>
         
         <div class="contacts-section">
-            <div class="stats-info">
-                Всего контактов: <strong>{{ total }}</strong>
+            <div class="actions-row">
+                <div class="stats-info">
+                    Всего контактов: <strong>{{ total }}</strong>
+                </div>
+                <a href="{{ url_for('export_flat_csv') }}" class="back-link">⬇️ Экспорт CSV</a>
             </div>
+            <form method="GET" action="{{ url_for('contacts_list') }}" class="search-row">
+                <input type="hidden" name="type" value="{{ selected_type }}">
+                <input type="text" name="q" value="{{ q or '' }}" placeholder="Поиск по контакту, домену или ключевому слову">
+                <button type="submit">Поиск</button>
+            </form>
             
             <div class="filters">
-                <a href="{{ url_for('contacts_list') }}" class="filter-btn {% if not selected_type %}active{% endif %}">Все</a>
-                <a href="{{ url_for('contacts_list', type='email') }}" class="filter-btn {% if selected_type == 'email' %}active{% endif %}">📧 Email</a>
-                <a href="{{ url_for('contacts_list', type='telegram') }}" class="filter-btn {% if selected_type == 'telegram' %}active{% endif %}">✈️ Telegram</a>
-                <a href="{{ url_for('contacts_list', type='linkedin') }}" class="filter-btn {% if selected_type == 'linkedin' %}active{% endif %}">💼 LinkedIn</a>
-                <a href="{{ url_for('contacts_list', type='phone') }}" class="filter-btn {% if selected_type == 'phone' %}active{% endif %}">📱 Телефон</a>
+                <a href="{{ url_for('contacts_list', q=q) }}" class="filter-btn {% if not selected_type %}active{% endif %}">Все</a>
+                <a href="{{ url_for('contacts_list', type='email', q=q) }}" class="filter-btn {% if selected_type == 'email' %}active{% endif %}">📧 Email</a>
+                <a href="{{ url_for('contacts_list', type='telegram', q=q) }}" class="filter-btn {% if selected_type == 'telegram' %}active{% endif %}">✈️ Telegram</a>
+                <a href="{{ url_for('contacts_list', type='linkedin', q=q) }}" class="filter-btn {% if selected_type == 'linkedin' %}active{% endif %}">💼 LinkedIn</a>
+                <a href="{{ url_for('contacts_list', type='phone', q=q) }}" class="filter-btn {% if selected_type == 'phone' %}active{% endif %}">📱 Телефон</a>
             </div>
             
             {% if contacts %}
@@ -239,13 +278,13 @@
             {% if total > per_page %}
             <div class="pagination">
                 {% if page > 1 %}
-                    <a href="{{ url_for('contacts_list', page=page-1, type=selected_type) }}" class="page-link">← Предыдущая</a>
+                    <a href="{{ url_for('contacts_list', page=page-1, type=selected_type, q=q) }}" class="page-link">← Предыдущая</a>
                 {% endif %}
                 
                 <span class="page-link active">Страница {{ page }}</span>
                 
                 {% if (page * per_page) < total %}
-                    <a href="{{ url_for('contacts_list', page=page+1, type=selected_type) }}" class="page-link">Следующая →</a>
+                    <a href="{{ url_for('contacts_list', page=page+1, type=selected_type, q=q) }}" class="page-link">Следующая →</a>
                 {% endif %}
             </div>
             {% endif %}

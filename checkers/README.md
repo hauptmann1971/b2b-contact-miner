@@ -24,6 +24,14 @@
 - **`test_manual.py`** - Ручное тестирование пайплайна
 - **`test_single_keyword.py`** - Тест с одним ключевым словом
 - **`test_single_keyword_reliable.py`** - Тест с улучшенной обработкой ошибок
+- **`smoke_pipeline_quality.py`** - Быстрый smoke-бенчмарк качества crawl/extract на 10-20 доменах
+  ```bash
+  # Без записи в БД (безопасный режим по умолчанию)
+  py checkers/smoke_pipeline_quality.py --limit 10
+
+  # С записью в БД (crawl_logs/domain_contacts/contacts)
+  py checkers/smoke_pipeline_quality.py --limit 10 --write-db
+  ```
 
 ## 🚀 Использование
 

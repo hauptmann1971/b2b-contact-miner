@@ -170,7 +170,6 @@ async def liveness_check():
 async def pipeline_metrics():
     """Get pipeline execution metrics with queue stats"""
     from utils.state_manager import StateManager
-    from workers.db_task_queue import DatabaseTaskQueue
     
     state_manager = StateManager()
     stats = state_manager.get_last_run_status()
@@ -180,6 +179,9 @@ async def pipeline_metrics():
     try:
         if task_queue:
             queue_stats = await task_queue.get_queue_stats()
+        else:
+            # Read queue quality metrics directly from DB when worker queue is not attached
+            queue_stats = await DatabaseTaskQueue(max_concurrent=1).get_queue_stats()
     except Exception as e:
         logger.warning(f"Failed to get queue stats: {e}")
     

@@ -24,6 +24,12 @@ class ExtractionService:
         self.linkedin_text_pattern = re.compile(r'LinkedIn[:\s]*(?:https?://)?(?:www\.)?linkedin\.com/(in|company)/([a-zA-Z0-9_-]+)', re.IGNORECASE)
         
         self.phone_pattern = re.compile(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}')
+        self.social_patterns = {
+            "x": re.compile(r'(?:https?://)?(?:www\.)?(?:x\.com|twitter\.com)/[A-Za-z0-9_]{1,50}', re.IGNORECASE),
+            "facebook": re.compile(r'(?:https?://)?(?:www\.)?facebook\.com/[A-Za-z0-9_.-]{1,100}', re.IGNORECASE),
+            "instagram": re.compile(r'(?:https?://)?(?:www\.)?instagram\.com/[A-Za-z0-9_.]{1,50}', re.IGNORECASE),
+            "youtube": re.compile(r'(?:https?://)?(?:www\.)?youtube\.com/(?:@|c/|channel/|user/)[A-Za-z0-9_.-]{1,100}', re.IGNORECASE),
+        }
         
         self.obfuscation_patterns = [
             r'\[at\]', r'\(at\)', r' at ',
@@ -39,6 +45,12 @@ class ExtractionService:
         telegram_links = set()
         linkedin_links = set()
         phone_numbers = set()
+        social_links = {
+            "x": set(),
+            "facebook": set(),
+            "instagram": set(),
+            "youtube": set(),
+        }
         
         needs_llm_fallback = False
         llm_candidate_pages = []
@@ -53,62 +65,66 @@ class ExtractionService:
             found_emails = self.email_pattern.findall(content)
             for email in found_emails:
                 if self._is_valid_business_email(email):
-                    emails.add(email.lower())
+                    emails.add(self._normalize_email(email))
             
             mailto_matches = self.mailto_pattern.finditer(content)
             for match in mailto_matches:
                 email = match.group(1).strip()
                 email = email.split('?')[0]
                 if self._is_valid_business_email(email):
-                    emails.add(email.lower())
+                    emails.add(self._normalize_email(email))
             
             has_obfuscation = any(re.search(pattern, content, re.IGNORECASE) 
                                  for pattern in self.obfuscation_patterns)
             
             telegram_matches = self.telegram_pattern.finditer(content)
             for match in telegram_matches:
-                telegram_links.add(f"https://t.me/{match.group(1)}")
+                telegram_links.add(self._normalize_telegram_link(f"https://t.me/{match.group(1)}"))
             
             # Also check for @username mentions after Telegram keyword
             telegram_at_matches = self.telegram_at_pattern.finditer(content)
             for match in telegram_at_matches:
                 username = match.group(1)
-                telegram_links.add(f"https://t.me/{username}")
+                telegram_links.add(self._normalize_telegram_link(f"https://t.me/{username}"))
             
             # Check for t.me links in href attributes
             telegram_href = re.findall(r'href=["\']([^"\']*t\.me[^"\']*)["\']', html, flags=re.IGNORECASE)
             for link in telegram_href:
-                telegram_links.add(link)
+                telegram_links.add(self._normalize_telegram_link(link))
 
             # Extract LinkedIn href links directly from HTML attributes.
             linkedin_href = re.findall(r'href=["\']([^"\']*linkedin\.com/(?:in|company)/[^"\']+)["\']', html, flags=re.IGNORECASE)
             for link in linkedin_href:
-                if link.startswith("//"):
-                    link = f"https:{link}"
-                elif link.startswith("/"):
-                    continue
-                elif not link.startswith("http"):
-                    link = f"https://{link.lstrip('/')}"
-                linkedin_links.add(link)
+                normalized = self._normalize_url(link)
+                if normalized:
+                    linkedin_links.add(normalized)
             
             # Check for join.chat links
             join_chat_matches = self.telegram_join_pattern.finditer(content)
             for match in join_chat_matches:
-                telegram_links.add(f"https://join.chat/{match.group(1)}")
+                telegram_links.add(self._normalize_telegram_link(f"https://join.chat/{match.group(1)}"))
             
             linkedin_matches = self.linkedin_pattern.finditer(content)
             for match in linkedin_matches:
                 section = match.group(1)
                 profile_id = match.group(2)
                 full_url = f"https://linkedin.com/{section}/{profile_id}"
-                linkedin_links.add(full_url)
+                linkedin_links.add(self._normalize_url(full_url))
             
             # Also check LinkedIn text patterns
             linkedin_text_matches = self.linkedin_text_pattern.finditer(content)
             for match in linkedin_text_matches:
                 section = match.group(1)
                 profile_id = match.group(2)
-                linkedin_links.add(f"https://linkedin.com/{section}/{profile_id}")
+                linkedin_links.add(self._normalize_url(f"https://linkedin.com/{section}/{profile_id}"))
+
+            # Generic social links (text + html)
+            combined = f"{content}\n{html}"
+            for platform, pattern in self.social_patterns.items():
+                for match in pattern.findall(combined):
+                    normalized = self._normalize_url(match)
+                    if normalized:
+                        social_links[platform].add(normalized)
             
             phones = self.phone_pattern.findall(content)
             for phone in phones:
@@ -134,9 +150,10 @@ class ExtractionService:
         
         return ContactInfo(
             emails=filtered_emails,
-            telegram_links=list(telegram_links),
-            linkedin_links=list(linkedin_links),
-            phone_numbers=list(phone_numbers)
+            telegram_links=sorted(list(telegram_links)),
+            linkedin_links=sorted(list(linkedin_links)),
+            phone_numbers=sorted(list(phone_numbers)),
+            social_links={k: sorted(list(v)) for k, v in social_links.items() if v}
         ), llm_data
     
     def _extract_with_llm_selective(self, obfuscated_contents: List[str]) -> tuple:
@@ -369,6 +386,32 @@ If no contacts found, return:
             return True
         except EmailNotValidError:
             return False
+
+    @staticmethod
+    def _normalize_email(email: str) -> str:
+        return email.strip().lower()
+
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        url = (url or "").strip()
+        if not url:
+            return ""
+        if url.startswith("//"):
+            url = f"https:{url}"
+        elif not re.match(r'^https?://', url, re.IGNORECASE):
+            url = f"https://{url.lstrip('/')}"
+        # Remove URL fragments and tracking params for dedup
+        url = re.sub(r'#.*$', '', url)
+        url = re.sub(r'(\?|&)(utm_[^=&]+|fbclid|gclid)=[^&]*', '', url, flags=re.IGNORECASE)
+        url = re.sub(r'\?&', '?', url).rstrip('?&')
+        return url
+
+    def _normalize_telegram_link(self, link: str) -> str:
+        normalized = self._normalize_url(link)
+        if not normalized:
+            return ""
+        normalized = normalized.replace("telegram.me/", "t.me/")
+        return normalized
     
     def _filter_blocked_emails(self, emails: List[str]) -> List[str]:
         """Remove blocked emails"""

@@ -29,6 +29,10 @@ class ContactType(enum.Enum):
     TELEGRAM = "telegram"
     LINKEDIN = "linkedin"
     PHONE = "phone"
+    X = "x"
+    FACEBOOK = "facebook"
+    INSTAGRAM = "instagram"
+    YOUTUBE = "youtube"
 
 
 class Keyword(Base):

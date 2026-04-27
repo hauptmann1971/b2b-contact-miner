@@ -27,6 +27,7 @@ class ContactInfo(BaseModel):
     telegram_links: List[str] = Field(default_factory=list)
     linkedin_links: List[str] = Field(default_factory=list)
     phone_numbers: List[str] = Field(default_factory=list)
+    social_links: Dict[str, List[str]] = Field(default_factory=dict)
 
 
 class DomainContactResponse(BaseModel):

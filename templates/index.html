@@ -259,7 +259,7 @@
     <div class="container">
         <header>
             <h1>🔍 B2B Contact Miner</h1>
-            <p class="subtitle">Система поиска и извлечения контактной информации</p>
+            <p class="subtitle">User Workspace: ввод ключевых слов, результаты и экспорт</p>
         </header>
         
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -474,6 +474,8 @@
         </div>
         
         <div class="nav-links">
+                <a href="{{ url_for('user_workspace') }}" class="nav-link">👤 User Workspace</a>
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-link">🛠️ Admin Console</a>
                 <a href="{{ url_for('keywords_list') }}" class="nav-link">Все ключевые слова</a>
                 <a href="{{ url_for('contacts_list') }}" class="nav-link">Все контакты</a>
                 <a href="{{ url_for('export_flat_csv') }}" class="nav-link">⬇️ Экспорт CSV</a>

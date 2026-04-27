@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     EXTRACT_MAX_RETRIES: int = 1     # LLM может timeout
     SAVE_MAX_RETRIES: int = 3        # DB lock issues
     TASK_LOCK_TIMEOUT: int = 300     # seconds before lock expires (5 minutes)
+    ZERO_PAGE_CRAWLS_ALERT_THRESHOLD: int = 5
     
     # Logging
     LOG_FORMAT: str = "text"  # "text" or "json"

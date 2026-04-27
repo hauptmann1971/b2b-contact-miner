@@ -9,6 +9,7 @@ import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -122,7 +123,31 @@ def _save_smoke_result_to_db(url: str, crawl_data: dict, contacts) -> None:
         db.close()
 
 
-async def run_smoke(limit: int, write_db: bool):
+def _build_report_payload(before: dict, after: dict, summary: dict) -> dict:
+    return {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "before": before,
+        "after": after,
+        "summary": summary,
+    }
+
+
+def _save_report(report_payload: dict, report_file: str = None) -> str:
+    reports_dir = Path("artifacts") / "smoke-reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    if report_file:
+        target = Path(report_file)
+        if not target.is_absolute():
+            target = Path.cwd() / target
+    else:
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        target = reports_dir / f"smoke_quality_{timestamp}.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(report_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return str(target)
+
+
+async def run_smoke(limit: int, write_db: bool, report_file: str = None):
     db = SessionLocal()
     crawler = CrawlerService()
     extractor = ExtractionService()
@@ -173,7 +198,7 @@ async def run_smoke(limit: int, write_db: bool):
     print("\n=== SMOKE AFTER ===")
     print(json.dumps(after, ensure_ascii=False, indent=2))
     print("\n=== RUN SUMMARY ===")
-    print(json.dumps({
+    summary = {
         "sample_size": len(urls),
         "processed": processed,
         "write_db": write_db,
@@ -182,13 +207,19 @@ async def run_smoke(limit: int, write_db: bool):
         "zero_page_in_run": zero_page,
         "zero_page_rate_in_run": round((zero_page / processed * 100), 2) if processed else 0.0,
         "failures": failures,
-    }, ensure_ascii=False, indent=2))
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+    report_payload = _build_report_payload(before, after, summary)
+    report_path = _save_report(report_payload, report_file=report_file)
+    print(f"\nReport saved: {report_path}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run 10-20 domain smoke quality test")
     parser.add_argument("--limit", type=int, default=15, help="Number of domains to test (10-20 recommended)")
     parser.add_argument("--write-db", action="store_true", help="Persist smoke results to crawl_logs/domain_contacts/contacts")
+    parser.add_argument("--report-file", type=str, default="", help="Optional path for JSON report output")
     args = parser.parse_args()
     capped = max(1, min(args.limit, 20))
-    asyncio.run(run_smoke(capped, args.write_db))
+    asyncio.run(run_smoke(capped, args.write_db, args.report_file.strip() or None))

@@ -31,7 +31,11 @@
 
   # С записью в БД (crawl_logs/domain_contacts/contacts)
   py checkers/smoke_pipeline_quality.py --limit 10 --write-db
+
+  # Явно указать путь для JSON-отчета
+  py checkers/smoke_pipeline_quality.py --limit 10 --report-file artifacts/smoke-reports/latest.json
   ```
+  По умолчанию JSON-отчет сохраняется автоматически в `artifacts/smoke-reports/`.
 
 ## 🚀 Использование
 

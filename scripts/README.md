@@ -32,6 +32,18 @@ python script_name.py
 ### Monitoring
 - `monitor_workers.py` - Monitor worker processes and task queue
 
+### Automation
+- `register_weekly_smoke_task.ps1` - Register a Windows Task Scheduler job for weekly smoke KPI checks
+  ```powershell
+  # Default: every Sunday at 03:00
+  powershell -ExecutionPolicy Bypass -File scripts/register_weekly_smoke_task.ps1
+
+  # Custom thresholds and time
+  powershell -ExecutionPolicy Bypass -File scripts/register_weekly_smoke_task.ps1 `
+    -Day MON -Time 02:30 -Limit 15 `
+    -MinWithContactsRate 25 -MaxZeroPageRate 45 -MaxFailures 0
+  ```
+
 ### Testing & Validation
 - `validate_setup.py` - Validate project setup and dependencies
 - `test_async_pipeline.py` - Test async pipeline functionality

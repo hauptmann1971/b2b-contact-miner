@@ -147,6 +147,12 @@ class ContactMiningPipeline:
                 logger.info(f"   Completed: {stats['completed']}")
                 logger.info(f"   Failed: {stats['failed']}")
                 break
+
+            zero_page_crawls = stats.get('zero_page_crawls_24h', 0)
+            if zero_page_crawls >= settings.ZERO_PAGE_CRAWLS_ALERT_THRESHOLD:
+                logger.warning(
+                    f"⚠️ High zero-page crawl rate: {zero_page_crawls} domains in last 24h with pages_crawled=0"
+                )
             
             # Log progress every 30 seconds
             logger.info(
@@ -154,7 +160,8 @@ class ContactMiningPipeline:
                 f"{stats.get('running', 0)} running | "
                 f"{stats.get('completed', 0)} completed | "
                 f"{stats.get('failed', 0)} failed | "
-                f"{stats.get('keywords_in_progress', 0)} keywords in progress"
+                f"{stats.get('keywords_in_progress', 0)} keywords in progress | "
+                f"{stats.get('zero_page_crawls_24h', 0)} zero-page crawls/24h"
             )
             
             await asyncio.sleep(30)

@@ -55,6 +55,22 @@ class DatabaseTaskQueue:
         if self._extraction_service is None:
             self._extraction_service = ExtractionService()
         return self._extraction_service
+
+    @staticmethod
+    def _root_url(url: str) -> str:
+        """Convert a SERP result URL to domain root."""
+        parsed = urlparse(url)
+        if not parsed.scheme:
+            return f"https://{parsed.netloc}/" if parsed.netloc else f"https://{url.strip('/')}/"
+        return f"{parsed.scheme}://{parsed.netloc}/"
+
+    @staticmethod
+    def _needs_domain_fallback(url: str) -> bool:
+        """Heuristic: article/news-like URLs benefit from root-domain crawl."""
+        parsed = urlparse(url)
+        path = (parsed.path or "").lower()
+        article_markers = ["/news/", "/article", "/press", "/blog/", "/post/", ".html", ".htm"]
+        return len(path) > 1 and any(marker in path for marker in article_markers)
     
     async def start_workers(self):
         """Start worker tasks and recover stale tasks"""
@@ -278,21 +294,44 @@ class DatabaseTaskQueue:
             serp.save_results(db, keyword_id, search_results, raw_query, raw_response)
             logger.info(f"✓ Saved {len(search_results)} search results for keyword {keyword_id}")
             
-            # Create crawl tasks for each URL
+            # Create crawl tasks for each URL (+ optional domain-root fallback)
+            queued_urls = set()
             for idx, result in enumerate(search_results):
-                # Get the search_result_id we just saved
-                sr = db.query(SearchResult).filter(
-                    SearchResult.keyword_id == keyword_id,
-                    SearchResult.url == result['url']
-                ).first()
-                
-                if sr:
+                url = result['url']
+                candidate_urls = [url]
+                if self._needs_domain_fallback(url):
+                    candidate_urls.append(self._root_url(url))
+
+                for candidate_url in candidate_urls:
+                    if candidate_url in queued_urls:
+                        continue
+
+                    # Ensure SearchResult exists for this candidate URL
+                    sr = db.query(SearchResult).filter(
+                        SearchResult.keyword_id == keyword_id,
+                        SearchResult.url == candidate_url
+                    ).first()
+
+                    if not sr:
+                        sr = SearchResult(
+                            keyword_id=keyword_id,
+                            url=candidate_url,
+                            title=result.get('title'),
+                            snippet=result.get('snippet'),
+                            position=result.get('position'),
+                            raw_search_query=raw_query,
+                            raw_search_response=raw_response
+                        )
+                        db.add(sr)
+                        db.flush()
+
+                    queued_urls.add(candidate_url)
                     await self.add_task(
                         task_name=f"crawl_{sr.id}",
                         task_type='crawl_domain',
                         payload={
                             'search_result_id': sr.id,
-                            'url': result['url'],
+                            'url': candidate_url,
                             'keyword_id': keyword_id
                         },
                         priority=5,
@@ -301,7 +340,7 @@ class DatabaseTaskQueue:
                     )
             
             db.commit()
-            logger.info(f"✓ Created {len(search_results)} crawl tasks for keyword {keyword_id}")
+            logger.info(f"✓ Created {len(queued_urls)} crawl tasks for keyword {keyword_id}")
             
         except Exception as e:
             db.rollback()
@@ -395,12 +434,12 @@ class DatabaseTaskQueue:
         
         logger.info(f"🔎 Extracting contacts from {domain}")
         
-        # Crawl contact pages (fast mode)
+        # Phase 1: crawl contact pages (fast mode)
         crawler = self._get_crawler_service()
         if contact_page_urls:
             crawl_data = await crawler.crawl_contact_pages(url, contact_page_urls)
         else:
-            # Fallback: re-crawl entire domain if no contact pages identified
+            # No pre-identified contact pages: use full crawl directly
             crawl_data = await crawler.crawl_domain(url)
         
         if not crawl_data.get("content"):
@@ -410,6 +449,14 @@ class DatabaseTaskQueue:
         # Extract contacts
         extractor = self._get_extraction_service()
         contacts, llm_data = extractor.extract_contacts(crawl_data["content"])
+
+        # Phase 2 fallback: run full crawl only if fast phase found no contacts.
+        if contact_page_urls and not (contacts.emails or contacts.telegram_links or contacts.linkedin_links):
+            logger.info(f"No contacts in fast mode for {domain}; running full domain fallback crawl")
+            full_crawl_data = await crawler.crawl_domain(url)
+            if full_crawl_data.get("content"):
+                contacts, llm_data = extractor.extract_contacts(full_crawl_data["content"])
+                crawl_data = full_crawl_data
         
         # Verify emails via MX records
         if contacts.emails:
@@ -594,6 +641,10 @@ class DatabaseTaskQueue:
             ).distinct().count()
             
             stats['keywords_in_progress'] = keywords_in_progress
+            stats['zero_page_crawls_24h'] = db.query(CrawlLog).filter(
+                CrawlLog.pages_crawled == 0,
+                CrawlLog.crawled_at >= (datetime.now(timezone.utc) - timedelta(hours=24))
+            ).count()
             
             return stats
         except Exception as e:

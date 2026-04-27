@@ -243,23 +243,23 @@
                     <tr>
                         <td>
                             <span class="contact-icon">
-                                {% if contact.contact_type == 'email' %}
+                                {% if contact.contact_type|lower == 'email' %}
                                     📧
-                                {% elif contact.contact_type == 'telegram' %}
+                                {% elif contact.contact_type|lower == 'telegram' %}
                                     ✈️
-                                {% elif contact.contact_type == 'linkedin' %}
+                                {% elif contact.contact_type|lower == 'linkedin' %}
                                     💼
-                                {% elif contact.contact_type == 'phone' %}
+                                {% elif contact.contact_type|lower == 'phone' %}
                                     📱
                                 {% endif %}
                             </span>
                             {{ contact.contact_type|upper }}
                         </td>
                         <td><strong>{{ contact.value }}</strong></td>
-                        <td>{{ contact.domain_contact.domain }}</td>
+                        <td>{{ contact.domain_name }}</td>
                         <td>
-                            <a href="{{ url_for('keyword_detail', keyword_id=contact.domain_contact.search_result.keyword.id) }}" class="keyword-link">
-                                {{ contact.domain_contact.search_result.keyword.keyword }}
+                            <a href="{{ url_for('keyword_detail', keyword_id=contact.keyword_id) }}" class="keyword-link">
+                                {{ contact.keyword_text }}
                             </a>
                         </td>
                         <td>
@@ -269,7 +269,7 @@
                                 <span class="badge badge-secondary">⏳ Не проверен</span>
                             {% endif %}
                         </td>
-                        <td>{{ contact.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td>{{ contact.created_at.strftime('%d.%m.%Y %H:%M') if contact.created_at else '-' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

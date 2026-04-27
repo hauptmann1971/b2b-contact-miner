@@ -71,6 +71,7 @@
                 <a href="{{ url_for('user_workspace') }}">User Workspace</a>
                 <a href="{{ url_for('health_check_page') }}">Health UI</a>
                 <a href="/metrics/pipeline" target="_blank">/metrics/pipeline</a>
+                <a href="{{ url_for('llm_data_page') }}">LLM Data</a>
                 <a href="{{ url_for('api_docs_page') }}">API Docs</a>
             </div>
         </header>
@@ -168,6 +169,29 @@
             {% else %}
             <div class="muted">Запусков пока нет.</div>
             {% endif %}
+        </div>
+
+        <div class="panel">
+            <h2>🧪 Smoke Test Reports</h2>
+            {% if smoke_reports %}
+            <table>
+                <thead><tr><th>Report File</th><th>Updated (UTC)</th><th>Path</th></tr></thead>
+                <tbody>
+                {% for r in smoke_reports %}
+                    <tr>
+                        <td>{{ r.name }}</td>
+                        <td>{{ r.modified_at.strftime('%d.%m.%Y %H:%M:%S') if r.modified_at else '-' }}</td>
+                        <td>{{ r.path }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="muted">Smoke-отчеты пока не найдены (artifacts/smoke-reports).</div>
+            {% endif %}
+            <div class="muted" style="margin-top:10px;">
+                Weekly smoke: <code>py checkers/run_weekly_smoke.py --limit 15</code>
+            </div>
         </div>
 
         <div class="panel">

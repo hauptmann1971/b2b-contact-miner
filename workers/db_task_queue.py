@@ -510,7 +510,8 @@ class DatabaseTaskQueue:
                 "emails": contacts.emails,
                 "telegram": contacts.telegram_links,
                 "linkedin": contacts.linkedin_links,
-                "phones": contacts.phone_numbers if hasattr(contacts, 'phone_numbers') else []
+                "phones": contacts.phone_numbers if hasattr(contacts, 'phone_numbers') else [],
+                "social": contacts.social_links if hasattr(contacts, 'social_links') else {}
             }
             
             domain_contact = DomainContact(
@@ -548,6 +549,24 @@ class DatabaseTaskQueue:
                     value=li
                 )
                 db.add(contact)
+
+            for platform, links in (contacts.social_links or {}).items():
+                contact_type_map = {
+                    "x": ContactType.X,
+                    "facebook": ContactType.FACEBOOK,
+                    "instagram": ContactType.INSTAGRAM,
+                    "youtube": ContactType.YOUTUBE,
+                }
+                mapped_type = contact_type_map.get(platform)
+                if not mapped_type:
+                    continue
+                for link in links:
+                    contact = Contact(
+                        domain_contact_id=domain_contact.id,
+                        contact_type=mapped_type,
+                        value=link
+                    )
+                    db.add(contact)
             
             # Update crawl log with LLM data if available
             if llm_data:
@@ -563,10 +582,11 @@ class DatabaseTaskQueue:
             
             db.commit()
             
-            total_contacts = len(contacts.emails) + len(contacts.telegram_links) + len(contacts.linkedin_links)
+            total_social = sum(len(v) for v in (contacts.social_links or {}).values())
+            total_contacts = len(contacts.emails) + len(contacts.telegram_links) + len(contacts.linkedin_links) + total_social
             logger.info(f"✅ Saved {total_contacts} contacts for {domain}: "
                        f"{len(contacts.emails)} emails, {len(contacts.telegram_links)} Telegram, "
-                       f"{len(contacts.linkedin_links)} LinkedIn")
+                       f"{len(contacts.linkedin_links)} LinkedIn, {total_social} social")
             
         except Exception as e:
             db.rollback()

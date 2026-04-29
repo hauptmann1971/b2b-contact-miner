@@ -4,81 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Console - B2B Contact Miner</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-            min-height: 100vh;
-            padding: 20px;
-            color: #e5e7eb;
-        }
-        .container { max-width: 1400px; margin: 0 auto; }
-        header {
-            background: #0f172a;
-            padding: 24px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border: 1px solid #334155;
-        }
-        h1 { color: #60a5fa; font-size: 2em; }
-        .menu { display: flex; gap: 10px; flex-wrap: wrap; }
-        .menu a {
-            color: #e5e7eb;
-            text-decoration: none;
-            background: #1e293b;
-            border: 1px solid #334155;
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 0.95em;
-        }
-        .cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-        .card {
-            background: #0f172a;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 18px;
-        }
-        .card h3 { color: #93c5fd; margin-bottom: 8px; font-size: 1em; }
-        .value { font-size: 1.8em; font-weight: bold; color: #f8fafc; }
-        .panel {
-            background: #0f172a;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 18px;
-            margin-bottom: 16px;
-        }
-        .panel h2 { color: #93c5fd; margin-bottom: 12px; font-size: 1.2em; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 10px; border-bottom: 1px solid #1e293b; text-align: left; font-size: 0.92em; }
-        th { color: #cbd5e1; }
-        .muted { color: #94a3b8; }
-        .toolbar {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin: 0 0 12px 0;
-        }
-        .btn {
-            color: #e5e7eb;
-            text-decoration: none;
-            background: #1e293b;
-            border: 1px solid #334155;
-            padding: 9px 12px;
-            border-radius: 8px;
-            font-size: 0.9em;
-            cursor: pointer;
-        }
-        .btn-primary { background: #1d4ed8; border-color: #1d4ed8; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
 </head>
 <body>
     <div class="container">
@@ -255,20 +181,6 @@
             {% endif %}
         </div>
     </div>
-    <script>
-        (function () {
-            const toggle = document.getElementById('autoRefreshToggle');
-            let timer = null;
-            if (!toggle) return;
-            toggle.addEventListener('change', function () {
-                if (toggle.checked) {
-                    timer = setInterval(function () { location.reload(); }, 10000);
-                } else if (timer) {
-                    clearInterval(timer);
-                    timer = null;
-                }
-            });
-        })();
-    </script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>

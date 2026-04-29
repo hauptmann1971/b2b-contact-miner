@@ -72,22 +72,3 @@ th { color: #cbd5e1; }
 }
 .btn-primary { background: #1d4ed8; border-color: #1d4ed8; }
 
-.inline-form {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.inline-number {
-    width: 90px;
-}
-
-.toggle-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.mt-10 {
-    margin-top: 10px;
-}

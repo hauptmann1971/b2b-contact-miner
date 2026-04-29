@@ -1,0 +1,39 @@
+.text-muted {
+    color: #666;
+}
+
+.text-danger {
+    color: #dc3545;
+}
+
+.mt-10 {
+    margin-top: 10px;
+}
+
+.mt-15 {
+    margin-top: 15px;
+}
+
+.mb-10 {
+    margin-bottom: 10px;
+}
+
+.input-mt {
+    margin-top: 8px;
+}
+
+.inline-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.inline-number {
+    width: 90px;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

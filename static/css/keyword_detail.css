@@ -156,19 +156,7 @@ h1 {
     font-size: 1.1em;
 }
 
-.text-muted {
-    color: #666;
-}
-
 .text-muted-light {
     color: #999;
     font-style: italic;
-}
-
-.mt-10 {
-    margin-top: 10px;
-}
-
-.mb-10 {
-    margin-bottom: 10px;
 }

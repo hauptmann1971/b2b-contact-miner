@@ -84,6 +84,22 @@ def _sanitize_keyword_text(value: str) -> str:
     return value.replace('<', '').replace('>', '').replace('"', '').replace("'", '').strip()
 
 
+def _get_contact_type_counts(db):
+    """Return contact type counters robustly for enum and legacy rows."""
+    rows = db.execute(text("""
+        SELECT LOWER(CAST(contact_type AS CHAR)) AS contact_type, COUNT(*) AS cnt
+        FROM contacts
+        GROUP BY LOWER(CAST(contact_type AS CHAR))
+    """)).mappings().all()
+    counts = {row["contact_type"]: int(row["cnt"]) for row in rows}
+    return {
+        "email": counts.get("email", 0),
+        "telegram": counts.get("telegram", 0),
+        "linkedin": counts.get("linkedin", 0),
+        "phone": counts.get("phone", 0),
+    }
+
+
 def _normalize_language(value: str, fallback: str = 'ru') -> str:
     value = (value or '').strip().lower()
     if re.fullmatch(r'[a-z]{2,8}', value):
@@ -180,10 +196,11 @@ def _build_user_dashboard_context(db):
     recent_contacts = recent_contact_rows[:20]
     
     # Статистика по типам контактов
-    email_count = db.query(Contact).filter(Contact.contact_type == 'email').count()
-    telegram_count = db.query(Contact).filter(Contact.contact_type == 'telegram').count()
-    linkedin_count = db.query(Contact).filter(Contact.contact_type == 'linkedin').count()
-    phone_count = db.query(Contact).filter(Contact.contact_type == 'phone').count()
+    type_counts = _get_contact_type_counts(db)
+    email_count = type_counts["email"]
+    telegram_count = type_counts["telegram"]
+    linkedin_count = type_counts["linkedin"]
+    phone_count = type_counts["phone"]
 
     db_languages = [row[0] for row in db.query(Keyword.language).distinct().all() if row[0]]
     db_countries = [row[0] for row in db.query(Keyword.country).distinct().all() if row[0]]
@@ -758,17 +775,13 @@ def api_stats():
     """API эндпоинт для получения статистики"""
     db = SessionLocal()
     try:
+        type_counts = _get_contact_type_counts(db)
         stats = {
             'total_keywords': db.query(Keyword).count(),
             'processed_keywords': db.query(Keyword).filter(Keyword.is_processed == True).count(),
             'total_domains': db.query(DomainContact).count(),
             'total_contacts': db.query(Contact).count(),
-            'contacts_by_type': {
-                'email': db.query(Contact).filter(Contact.contact_type == 'email').count(),
-                'telegram': db.query(Contact).filter(Contact.contact_type == 'telegram').count(),
-                'linkedin': db.query(Contact).filter(Contact.contact_type == 'linkedin').count(),
-                'phone': db.query(Contact).filter(Contact.contact_type == 'phone').count()
-            }
+            'contacts_by_type': type_counts
         }
         return jsonify(stats)
     finally:

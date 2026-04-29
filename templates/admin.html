@@ -97,9 +97,11 @@
             <h2>🎛️ Admin Actions</h2>
             <div class="toolbar">
                 <form method="POST" action="{{ url_for('admin_recover_stale') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-primary">Recover Stale</button>
                 </form>
                 <form method="POST" action="{{ url_for('admin_retry_failed') }}" style="display:flex; gap:8px; align-items:center;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <input type="number" name="limit" value="20" min="1" max="200" class="btn" style="width:90px;">
                     <button type="submit" class="btn btn-primary">Retry Failed</button>
                 </form>

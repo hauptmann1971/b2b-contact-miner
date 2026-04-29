@@ -1,0 +1,27 @@
+{% macro page_header(title, subtitle='', back_url='', back_label='', menu_items=none) %}
+<header>
+    <h1>{{ title }}</h1>
+    {% if subtitle %}
+    <p class="subtitle">{{ subtitle }}</p>
+    {% endif %}
+    {% if back_url and back_label %}
+    <a href="{{ back_url }}" class="back-link">{{ back_label }}</a>
+    {% endif %}
+    {% if menu_items %}
+    <div class="menu">
+        {% for item in menu_items %}
+        <a href="{{ item.href }}"{% if item.target %} target="{{ item.target }}"{% endif %}>{{ item.label }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</header>
+{% endmacro %}
+
+{% macro section(title, class_name) %}
+<div class="{{ class_name }}">
+    {% if title %}
+    <h2>{{ title }}</h2>
+    {% endif %}
+    {{ caller() }}
+</div>
+{% endmacro %}

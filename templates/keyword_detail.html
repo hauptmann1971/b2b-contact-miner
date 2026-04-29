@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "includes/components.html" as ui %}
 
 {% block title %}{{ keyword.keyword }} - Детали{% endblock %}
 
@@ -8,10 +9,9 @@
 
 {% block content %}
     <div class="container">
-        <a href="{{ url_for('keywords_list') }}" class="back-link">← Назад к списку</a>
+        {{ ui.page_header("🔍 " ~ keyword.keyword, back_url=url_for('keywords_list'), back_label='← Назад к списку') }}
         
-        <header>
-            <h1>🔍 {{ keyword.keyword }}</h1>
+        <div class="section">
             <div class="keyword-info">
                 <div class="info-item">
                     <div class="info-label">Язык</div>
@@ -40,7 +40,7 @@
                     <div class="info-value">{{ domain_contacts|length }}</div>
                 </div>
             </div>
-        </header>
+        </div>
         
         <div class="section">
             <h2>🌐 Найденные домены и контакты</h2>

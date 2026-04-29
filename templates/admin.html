@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "includes/components.html" as ui %}
 
 {% block title %}Admin Console - B2B Contact Miner{% endblock %}
 
@@ -8,19 +9,18 @@
 
 {% block content %}
     <div class="container">
-        <header>
-            <h1>🛠️ Admin Console</h1>
-            <div class="menu">
-                <a href="{{ url_for('user_workspace') }}">User Workspace</a>
-                <a href="{{ url_for('health_check_page') }}">Health UI</a>
-                <a href="/metrics/pipeline" target="_blank">/metrics/pipeline</a>
-                <a href="{{ url_for('llm_data_page') }}">LLM Data</a>
-                <a href="{{ url_for('api_docs_page') }}">API Docs</a>
-            </div>
-        </header>
+        {{ ui.page_header(
+            "🛠️ Admin Console",
+            menu_items=[
+                {"href": url_for('user_workspace'), "label": "User Workspace", "target": ""},
+                {"href": url_for('health_check_page'), "label": "Health UI", "target": ""},
+                {"href": "/metrics/pipeline", "label": "/metrics/pipeline", "target": "_blank"},
+                {"href": url_for('llm_data_page'), "label": "LLM Data", "target": ""},
+                {"href": url_for('api_docs_page'), "label": "API Docs", "target": ""}
+            ]
+        ) }}
 
-        <div class="panel">
-            <h2>🎛️ Admin Actions</h2>
+        {% call ui.section("🎛️ Admin Actions", "panel") %}
             <div class="toolbar">
                 <form method="POST" action="{{ url_for('admin_recover_stale') }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -40,7 +40,7 @@
                 Active worker locks: <strong>{{ active_worker_locks }}</strong> |
                 Oldest lock age: <strong>{{ oldest_lock_minutes }}</strong> min
             </div>
-        </div>
+        {% endcall %}
 
         <div class="cards">
             <div class="card"><h3>Total Tasks</h3><div class="value">{{ total_tasks }}</div></div>
@@ -50,8 +50,7 @@
             <div class="card"><h3>Stale Tasks</h3><div class="value">{{ stale_tasks|length }}</div></div>
         </div>
 
-        <div class="panel">
-            <h2>🔄 Running Tasks</h2>
+        {% call ui.section("🔄 Running Tasks", "panel") %}
             {% if running_tasks %}
             <table>
                 <thead><tr><th>ID</th><th>Type</th><th>Worker</th><th>Locked At</th><th>Retry</th></tr></thead>
@@ -70,10 +69,9 @@
             {% else %}
             <div class="muted">Нет активных running-задач.</div>
             {% endif %}
-        </div>
+        {% endcall %}
 
-        <div class="panel">
-            <h2>🚨 Failed Tasks (Top 10)</h2>
+        {% call ui.section("🚨 Failed Tasks (Top 10)", "panel") %}
             {% if failed_tasks %}
             <table>
                 <thead><tr><th>ID</th><th>Type</th><th>Error</th><th>Created</th></tr></thead>
@@ -91,10 +89,9 @@
             {% else %}
             <div class="muted">Нет failed-задач.</div>
             {% endif %}
-        </div>
+        {% endcall %}
 
-        <div class="panel">
-            <h2>⏱️ Stale Tasks</h2>
+        {% call ui.section("⏱️ Stale Tasks", "panel") %}
             {% if stale_tasks %}
             <table>
                 <thead><tr><th>ID</th><th>Type</th><th>Worker</th><th>Locked At</th></tr></thead>
@@ -112,10 +109,9 @@
             {% else %}
             <div class="muted">Зависших задач не обнаружено.</div>
             {% endif %}
-        </div>
+        {% endcall %}
 
-        <div class="panel">
-            <h2>📈 Latest Pipeline Runs</h2>
+        {% call ui.section("📈 Latest Pipeline Runs", "panel") %}
             {% if latest_runs %}
             <table>
                 <thead><tr><th>Run ID</th><th>Status</th><th>Progress</th><th>Websites</th><th>Contacts</th><th>Updated</th></tr></thead>
@@ -135,10 +131,9 @@
             {% else %}
             <div class="muted">Запусков пока нет.</div>
             {% endif %}
-        </div>
+        {% endcall %}
 
-        <div class="panel">
-            <h2>🧪 Smoke Test Reports</h2>
+        {% call ui.section("🧪 Smoke Test Reports", "panel") %}
             {% if smoke_reports %}
             <table>
                 <thead><tr><th>Report File</th><th>Updated (UTC)</th><th>Path</th></tr></thead>
@@ -158,10 +153,9 @@
             <div class="muted mt-10">
                 Weekly smoke: <code>py checkers/run_weekly_smoke.py --limit 15</code>
             </div>
-        </div>
+        {% endcall %}
 
-        <div class="panel">
-            <h2>🪵 Recent Crawl Errors</h2>
+        {% call ui.section("🪵 Recent Crawl Errors", "panel") %}
             {% if recent_crawl_errors %}
             <table>
                 <thead><tr><th>Domain</th><th>URL</th><th>Error</th><th>Time</th></tr></thead>
@@ -179,7 +173,7 @@
             {% else %}
             <div class="muted">Ошибок crawl не найдено.</div>
             {% endif %}
-        </div>
+        {% endcall %}
     </div>
 {% endblock %}
 

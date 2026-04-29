@@ -3,159 +3,7 @@
 {% block title %}Ключевые слова - B2B Contact Miner{% endblock %}
 
 {% block extra_head %}
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        header {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            margin-bottom: 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        h1 {
-            color: #667eea;
-            font-size: 2em;
-        }
-        
-        .back-link {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 25px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: transform 0.2s;
-        }
-        
-        .back-link:hover {
-            transform: translateY(-2px);
-        }
-        
-        .keywords-section {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        
-        th, td {
-            padding: 15px;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        th {
-            background: #f8f9fa;
-            color: #667eea;
-            font-weight: 600;
-        }
-        
-        tr:hover {
-            background: #f8f9fa;
-        }
-        
-        .badge {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: 500;
-        }
-        
-        .badge-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .badge-secondary {
-            background: #e2e3e5;
-            color: #383d41;
-        }
-        
-        .btn {
-            padding: 8px 15px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.9em;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.2s;
-        }
-        
-        .btn-view {
-            background: #667eea;
-            color: white;
-        }
-        
-        .btn-view:hover {
-            background: #5568d3;
-        }
-        
-        .btn-delete {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .btn-delete:hover {
-            background: #c82333;
-        }
-        
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 30px;
-        }
-        
-        .page-link {
-            padding: 10px 15px;
-            background: white;
-            color: #667eea;
-            text-decoration: none;
-            border-radius: 5px;
-            border: 2px solid #667eea;
-            transition: all 0.2s;
-        }
-        
-        .page-link:hover, .page-link.active {
-            background: #667eea;
-            color: white;
-        }
-        
-        .stats-info {
-            color: #666;
-            margin-bottom: 20px;
-            font-size: 1.1em;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/keywords.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -202,7 +50,7 @@
                         <td>{{ kw.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                         <td>
                             <a href="{{ url_for('keyword_detail', keyword_id=kw.id) }}" class="btn btn-view">Просмотр</a>
-                            <form method="POST" action="{{ url_for('delete_keyword', keyword_id=kw.id) }}" style="display: inline;" onsubmit="return confirm('Удалить это ключевое слово?');">
+                            <form method="POST" action="{{ url_for('delete_keyword', keyword_id=kw.id) }}" class="inline-delete-form" onsubmit="return confirm('Удалить это ключевое слово?');">
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-delete">Удалить</button>
                             </form>
@@ -227,7 +75,7 @@
             {% endif %}
             
             {% else %}
-            <p style="text-align: center; color: #666; padding: 40px;">Нет ключевых слов в базе данных.</p>
+            <p class="empty-state">Нет ключевых слов в базе данных.</p>
             {% endif %}
         </div>
     </div>

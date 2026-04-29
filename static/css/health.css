@@ -1,0 +1,237 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+header {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1 {
+    color: #667eea;
+    font-size: 2em;
+}
+
+.back-link {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 25px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: transform 0.2s;
+}
+
+.back-link:hover {
+    transform: translateY(-2px);
+}
+
+.health-section {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+}
+
+.health-section h2 {
+    color: #667eea;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+.status-healthy {
+    background: #28a745;
+    box-shadow: 0 0 10px #28a745;
+}
+
+.status-unhealthy {
+    background: #dc3545;
+    box-shadow: 0 0 10px #dc3545;
+}
+
+.status-pending {
+    background: #ffc107;
+    box-shadow: 0 0 10px #ffc107;
+}
+
+.service-card {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+    border-left: 4px solid #667eea;
+    transition: all 0.3s;
+}
+
+.service-card:hover {
+    transform: translateX(5px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+}
+
+.service-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.service-name {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #333;
+}
+
+.service-status {
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-danger {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.timestamp {
+    color: #666;
+    font-size: 0.9em;
+    margin-top: 10px;
+}
+
+.overall-status {
+    text-align: center;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.overall-healthy {
+    background: #d4edda;
+    color: #155724;
+    border: 3px solid #28a745;
+}
+
+.overall-unhealthy {
+    background: #f8d7da;
+    color: #721c24;
+    border: 3px solid #dc3545;
+}
+
+.refresh-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 25px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 500;
+    transition: all 0.2s;
+    margin-top: 20px;
+}
+
+.refresh-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.refresh-btn:active {
+    transform: translateY(0);
+}
+
+.refresh-btn.loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.auto-refresh {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+    color: #666;
+}
+
+.auto-refresh input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+code {
+    background: #f4f4f4;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    color: #667eea;
+}
+
+.text-muted {
+    color: #666;
+}
+
+.text-danger {
+    color: #dc3545;
+}
+
+.mt-10 {
+    margin-top: 10px;
+}
+
+.inline-link-btn {
+    display: inline-block;
+    margin-top: 10px;
+    text-decoration: none;
+}
+
+.csv-download-btn {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+
+.service-card-success {
+    border-left-color: #28a745;
+}

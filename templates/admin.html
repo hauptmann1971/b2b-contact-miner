@@ -26,13 +26,13 @@
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-primary">Recover Stale</button>
                 </form>
-                <form method="POST" action="{{ url_for('admin_retry_failed') }}" style="display:flex; gap:8px; align-items:center;">
+                <form method="POST" action="{{ url_for('admin_retry_failed') }}" class="inline-form">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                    <input type="number" name="limit" value="20" min="1" max="200" class="btn" style="width:90px;">
+                    <input type="number" name="limit" value="20" min="1" max="200" class="btn inline-number">
                     <button type="submit" class="btn btn-primary">Retry Failed</button>
                 </form>
                 <button type="button" class="btn" onclick="location.reload()">Refresh now</button>
-                <label class="btn" style="display:flex; align-items:center; gap:8px;">
+                <label class="btn toggle-label">
                     <input type="checkbox" id="autoRefreshToggle"> Auto-refresh (10s)
                 </label>
             </div>
@@ -155,7 +155,7 @@
             {% else %}
             <div class="muted">Smoke-отчеты пока не найдены (artifacts/smoke-reports).</div>
             {% endif %}
-            <div class="muted" style="margin-top:10px;">
+            <div class="muted mt-10">
                 Weekly smoke: <code>py checkers/run_weekly_smoke.py --limit 15</code>
             </div>
         </div>

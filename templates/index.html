@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "includes/components.html" as ui %}
 
 {% block title %}B2B Contact Miner - Главная{% endblock %}
 
@@ -8,10 +9,7 @@
 
 {% block content %}
     <div class="container">
-        <header>
-            <h1>🔍 B2B Contact Miner</h1>
-            <p class="subtitle">Пользовательская страница: ввод ключевых слов, результаты и экспорт</p>
-        </header>
+        {{ ui.page_header("🔍 B2B Contact Miner", "Пользовательская страница: ввод ключевых слов, результаты и экспорт") }}
         
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -61,8 +59,7 @@
             </div>
         </div>
         
-        <div class="form-section">
-            <h2>➕ Добавить новое ключевое слово</h2>
+        {% call ui.section("➕ Добавить новое ключевое слово", "form-section") %}
             <form method="POST" action="{{ url_for('add_keyword') }}">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <div class="form-row">
@@ -93,10 +90,9 @@
                 </div>
                 <button type="submit">Добавить ключевое слово</button>
             </form>
-        </div>
+        {% endcall %}
 
-        <div class="form-section">
-            <h2>📥 Массовый ввод ключевых слов</h2>
+        {% call ui.section("📥 Массовый ввод ключевых слов", "form-section") %}
             <form method="POST" action="{{ url_for('add_keywords_bulk') }}">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
@@ -128,10 +124,9 @@
                 </div>
                 <button type="submit">Добавить списком</button>
             </form>
-        </div>
+        {% endcall %}
         
-        <div class="recent-keywords">
-            <h2>📋 Последние ключевые слова</h2>
+        {% call ui.section("📋 Последние ключевые слова", "recent-keywords") %}
             {% if recent_keywords %}
             <table>
                 <thead>
@@ -164,10 +159,9 @@
             {% else %}
             <p class="empty-state-sm">Пока нет ключевых слов. Добавьте первое!</p>
             {% endif %}
-        </div>
+        {% endcall %}
 
-        <div class="recent-keywords">
-            <h2>📤 Последние найденные контакты</h2>
+        {% call ui.section("📤 Последние найденные контакты", "recent-keywords") %}
             {% if recent_contacts %}
             <table>
                 <thead>
@@ -192,7 +186,7 @@
             {% else %}
             <p class="empty-state-sm">Контактов пока нет.</p>
             {% endif %}
-        </div>
+        {% endcall %}
         
         <div class="nav-links">
                 <a href="{{ url_for('user_workspace') }}" class="nav-link">👤 Страница пользователя</a>

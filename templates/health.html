@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "includes/components.html" as ui %}
 
 {% block title %}Health Check - B2B Contact Miner{% endblock %}
 
@@ -11,10 +12,7 @@
 
 {% block content %}
     <div class="container">
-        <header>
-            <h1>💚 Health Check</h1>
-            <a href="/" class="back-link">← На главную</a>
-        </header>
+        {{ ui.page_header("💚 Health Check", back_url='/', back_label='← На главную') }}
         
         <div id="overall-status" class="overall-status overall-healthy">
             <span class="status-indicator status-healthy"></span>

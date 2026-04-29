@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "includes/components.html" as ui %}
 
 {% block title %}API Documentation - B2B Contact Miner{% endblock %}
 
@@ -8,10 +9,7 @@
 
 {% block content %}
     <div class="container">
-        <header>
-            <h1>📡 API Documentation</h1>
-            <a href="/" class="back-link">← На главную</a>
-        </header>
+        {{ ui.page_header("📡 API Documentation", back_url='/', back_label='← На главную') }}
         
         <div class="api-section">
             <h2>🔍 Health Check Endpoints</h2>

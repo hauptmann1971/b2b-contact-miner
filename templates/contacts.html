@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "includes/components.html" as ui %}
 
 {% block title %}Контакты - B2B Contact Miner{% endblock %}
 
@@ -8,10 +9,7 @@
 
 {% block content %}
     <div class="container">
-        <header>
-            <h1>📧 Все контакты</h1>
-            <a href="{{ url_for('index') }}" class="back-link">← На главную</a>
-        </header>
+        {{ ui.page_header("📧 Все контакты", back_url=url_for('index'), back_label='← На главную') }}
         
         <div class="contacts-section">
             <div class="actions-row">

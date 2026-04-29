@@ -1,12 +1,12 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>B2B Contact Miner - Главная</title>
+{% extends "base.html" %}
+
+{% block title %}B2B Contact Miner - Главная{% endblock %}
+
+{% block extra_head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <header>
             <h1>🔍 B2B Contact Miner</h1>
@@ -203,5 +203,4 @@
             </div>
         </div>
     </div>
-</body>
-</html>
+{% endblock %}

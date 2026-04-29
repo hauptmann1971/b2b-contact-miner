@@ -1,12 +1,12 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Console - B2B Contact Miner</title>
+{% extends "base.html" %}
+
+{% block title %}Admin Console - B2B Contact Miner{% endblock %}
+
+{% block extra_head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <header>
             <h1>🛠️ Admin Console</h1>
@@ -181,6 +181,8 @@
             {% endif %}
         </div>
     </div>
+{% endblock %}
+
+{% block extra_scripts %}
     <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
-</body>
-</html>
+{% endblock %}

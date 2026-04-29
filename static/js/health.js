@@ -1,5 +1,10 @@
 let autoRefreshInterval = null;
 
+function safeNumber(value, fallback = 0) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+}
+
 function formatTimestamp(isoString) {
     const date = new Date(isoString);
     return date.toLocaleString("ru-RU");
@@ -155,48 +160,57 @@ async function loadCrawlerSettings() {
         const data = await response.json();
 
         const container = document.getElementById("crawlerSettings");
+        if (!container) {
+            return;
+        }
+        const domainCrawlTimeout = safeNumber(data.domain_crawl_timeout);
+        const requestTimeout = safeNumber(data.request_timeout);
+        const maxPagesPerDomain = safeNumber(data.max_pages_per_domain);
+        const searchResultsPerKeyword = safeNumber(data.search_results_per_keyword);
+        const concurrentBrowsers = safeNumber(data.concurrent_browsers);
+        const delayBetweenRequests = safeNumber(data.delay_between_requests);
         container.innerHTML = `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
                 <div class="service-card">
                     <div class="service-header">
                         <span class="service-name">Domain Crawl Timeout</span>
                     </div>
-                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.domain_crawl_timeout}s</p>
+                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${domainCrawlTimeout}s</p>
                     <p class="text-muted" style="font-size: 0.9em;">Максимальное время на crawling одного домена</p>
                 </div>
                 <div class="service-card">
                     <div class="service-header">
                         <span class="service-name">Request Timeout</span>
                     </div>
-                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.request_timeout}s</p>
+                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${requestTimeout}s</p>
                     <p class="text-muted" style="font-size: 0.9em;">Timeout на одну страницу</p>
                 </div>
                 <div class="service-card">
                     <div class="service-header">
                         <span class="service-name">Max Pages per Domain</span>
                     </div>
-                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.max_pages_per_domain}</p>
+                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${maxPagesPerDomain}</p>
                     <p class="text-muted" style="font-size: 0.9em;">Максимум страниц на домен</p>
                 </div>
                 <div class="service-card">
                     <div class="service-header">
                         <span class="service-name">Search Results per Keyword</span>
                     </div>
-                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.search_results_per_keyword}</p>
+                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${searchResultsPerKeyword}</p>
                     <p class="text-muted" style="font-size: 0.9em;">Количество сайтов для обработки</p>
                 </div>
                 <div class="service-card">
                     <div class="service-header">
                         <span class="service-name">Concurrent Browsers</span>
                     </div>
-                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.concurrent_browsers}</p>
+                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${concurrentBrowsers}</p>
                     <p class="text-muted" style="font-size: 0.9em;">Параллельных браузеров</p>
                 </div>
                 <div class="service-card">
                     <div class="service-header">
                         <span class="service-name">Delay Between Requests</span>
                     </div>
-                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.delay_between_requests}s</p>
+                    <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${delayBetweenRequests}s</p>
                     <p class="text-muted" style="font-size: 0.9em;">Задержка между запросами</p>
                 </div>
             </div>

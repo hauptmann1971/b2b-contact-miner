@@ -1,9 +1,8 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Documentation - B2B Contact Miner</title>
+{% extends "base.html" %}
+
+{% block title %}API Documentation - B2B Contact Miner{% endblock %}
+
+{% block extra_head %}
     <style>
         * {
             margin: 0;
@@ -207,8 +206,9 @@
             color: #667eea;
         }
     </style>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <header>
             <h1>📡 API Documentation</h1>
@@ -357,7 +357,9 @@
             </div>
         </div>
     </div>
-    
+{% endblock %}
+
+{% block extra_scripts %}
     <script>
         function loadStats() {
             const display = document.getElementById('stats-display');
@@ -411,5 +413,4 @@
                 });
         }
     </script>
-</body>
-</html>
+{% endblock %}

@@ -210,18 +210,6 @@ code {
     color: #667eea;
 }
 
-.text-muted {
-    color: #666;
-}
-
-.text-danger {
-    color: #dc3545;
-}
-
-.mt-10 {
-    margin-top: 10px;
-}
-
 .inline-link-btn {
     display: inline-block;
     margin-top: 10px;

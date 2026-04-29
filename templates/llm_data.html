@@ -1,12 +1,12 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM & Search Data - B2B Contact Miner</title>
+{% extends "base.html" %}
+
+{% block title %}LLM & Search Data - B2B Contact Miner{% endblock %}
+
+{% block extra_head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/llm_data.css') }}">
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <h1>🔍 LLM & Search Data Viewer</h1>
         
@@ -105,7 +105,8 @@
             </table>
         </div>
     </div>
-    
+{% endblock %}
+
+{% block extra_scripts %}
     <script src="{{ url_for('static', filename='js/llm_data.js') }}"></script>
-</body>
-</html>
+{% endblock %}

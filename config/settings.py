@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     AUTO_REFRESH_YANDEX_IAM_BEFORE_RUN: bool = False
     PERSIST_REFRESHED_YANDEX_IAM_TO_ENV: bool = False
     ENFORCE_LLM_READY: bool = False
+    LLM_HEALTHCHECK_BEFORE_RUN: bool = True
+    LLM_HEALTHCHECK_TIMEOUT_SECONDS: int = 10
     
     USE_LLM_EXTRACTION: bool = True
     
@@ -100,6 +102,7 @@ class Settings(BaseSettings):
     TIMEOUT_RATE_ALERT_THRESHOLD_PCT: float = 35.0
     CONTACTS_RATE_ALERT_THRESHOLD_PCT: float = 20.0
     AVG_CONTACTS_PER_DOMAIN_ALERT_THRESHOLD: float = 0.5
+    NIGHTLY_FAIL_ON_QUALITY_GATE: bool = False
     
     # Logging
     LOG_FORMAT: str = "text"  # "text" or "json"

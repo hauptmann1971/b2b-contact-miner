@@ -89,6 +89,9 @@ class ContactMiningPipeline:
                 if settings.USE_OPENAI and settings.OPENAI_API_KEY:
                     llm_ready = True
 
+                if llm_ready and settings.LLM_HEALTHCHECK_BEFORE_RUN:
+                    self._run_llm_health_probe()
+
                 if not llm_ready:
                     msg = "Preflight: no ready LLM provider configured; fallback extraction may be disabled"
                     if settings.ENFORCE_LLM_READY:
@@ -98,6 +101,44 @@ class ContactMiningPipeline:
             if settings.ENFORCE_LLM_READY:
                 raise
             logger.warning(f"Preflight checks failed with non-fatal error: {e}")
+
+    def _run_llm_health_probe(self):
+        """Run lightweight preflight probe against the selected LLM provider."""
+        timeout = max(3, int(settings.LLM_HEALTHCHECK_TIMEOUT_SECONDS))
+        try:
+            if settings.USE_YANDEXGPT and settings.YANDEX_IAM_TOKEN and settings.YANDEX_FOLDER_ID:
+                url = "https://llm.api.cloud.yandex.net/foundationModels/v1/tokenize"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-folder-id": settings.YANDEX_FOLDER_ID,
+                    "Authorization": f"Bearer {settings.YANDEX_IAM_TOKEN}",
+                }
+                payload = {
+                    "modelUri": f"gpt://{settings.YANDEX_FOLDER_ID}/yandexgpt/latest",
+                    "text": "healthcheck",
+                }
+                response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                response.raise_for_status()
+                logger.info("Preflight: YandexGPT health probe passed")
+                return
+
+            if settings.USE_DEEPSEEK and settings.DEEPSEEK_API_KEY:
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
+                client.models.list()
+                logger.info("Preflight: DeepSeek health probe passed")
+                return
+
+            if settings.USE_OPENAI and settings.OPENAI_API_KEY:
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                client.models.list()
+                logger.info("Preflight: OpenAI health probe passed")
+                return
+        except Exception as e:
+            if settings.ENFORCE_LLM_READY:
+                raise RuntimeError(f"LLM health probe failed: {e}") from e
+            logger.warning(f"Preflight: LLM health probe failed: {e}")
 
     def _refresh_yandex_iam_token(self):
         """Refresh Yandex IAM token from OAuth token before pipeline start."""
@@ -199,7 +240,9 @@ class ContactMiningPipeline:
             logger.info(f"   Queue stats: {await self.task_queue.get_queue_stats()}")
             
             # Wait for all tasks to complete
-            await self._wait_for_completion(pending_keywords)
+            quality_gate_ok = await self._wait_for_completion(pending_keywords)
+            if not quality_gate_ok and settings.NIGHTLY_FAIL_ON_QUALITY_GATE:
+                raise RuntimeError("Nightly quality gate failed")
             
             logger.info(f"\n🎉 Pipeline completed successfully!")
         
@@ -218,11 +261,13 @@ class ContactMiningPipeline:
         
         logger.info(f"\n⏳ Waiting for tasks to complete (timeout: {timeout_hours}h)...")
         
+        quality_gate_ok = True
         while True:
             # Check timeout
             elapsed = time.time() - start_time
             if elapsed > timeout_seconds:
                 logger.error(f"❌ Pipeline timeout after {elapsed/3600:.1f} hours")
+                quality_gate_ok = False
                 break
             
             # Get queue stats
@@ -240,6 +285,7 @@ class ContactMiningPipeline:
                 logger.info(f"   Total: {stats['total']} tasks")
                 logger.info(f"   Completed: {stats['completed']}")
                 logger.info(f"   Failed: {stats['failed']}")
+                quality_gate_ok = self._evaluate_quality_gate(stats)
                 break
 
             zero_page_crawls = stats.get('zero_page_crawls_24h', 0)
@@ -279,6 +325,33 @@ class ContactMiningPipeline:
             )
             
             await asyncio.sleep(30)
+        return quality_gate_ok
+
+    def _evaluate_quality_gate(self, stats: dict) -> bool:
+        """Final quality gate for unattended nightly runs."""
+        failed = stats.get("failed", 0)
+        timeout_rate = stats.get("timeout_rate_24h", 0.0)
+        contacts_rate = stats.get("domains_with_contacts_rate_24h", 0.0)
+        avg_contacts = stats.get("avg_contacts_per_domain_24h", 0.0)
+        zero_page_crawls = stats.get("zero_page_crawls_24h", 0)
+
+        alerts = []
+        if failed > 0:
+            alerts.append(f"failed_tasks={failed}")
+        if timeout_rate >= settings.TIMEOUT_RATE_ALERT_THRESHOLD_PCT:
+            alerts.append(f"timeout_rate_24h={timeout_rate}%")
+        if contacts_rate <= settings.CONTACTS_RATE_ALERT_THRESHOLD_PCT:
+            alerts.append(f"contacts_rate_24h={contacts_rate}%")
+        if avg_contacts <= settings.AVG_CONTACTS_PER_DOMAIN_ALERT_THRESHOLD:
+            alerts.append(f"avg_contacts_per_domain_24h={avg_contacts}")
+        if zero_page_crawls >= settings.ZERO_PAGE_CRAWLS_ALERT_THRESHOLD:
+            alerts.append(f"zero_page_crawls_24h={zero_page_crawls}")
+
+        if alerts:
+            logger.error(f"🚨 Nightly quality gate alerts: {', '.join(alerts)}")
+            return False
+        logger.info("✅ Nightly quality gate passed")
+        return True
     
     async def _process_keyword(self, db: Session, keyword_service: KeywordService, keyword) -> dict:
         """Process a single keyword with error handling and retry"""

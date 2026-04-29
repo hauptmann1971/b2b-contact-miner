@@ -234,6 +234,36 @@ source venv/bin/activate
 python main.py
 ```
 
+### Nightly Cron (Autonomous + LLM preflight)
+1. Configure `.env` for autonomous LLM readiness:
+```env
+USE_LLM_EXTRACTION=true
+USE_YANDEXGPT=true
+YANDEX_FOLDER_ID=your_folder_id
+YANDEX_OAUTH_TOKEN=your_oauth_token
+AUTO_REFRESH_YANDEX_IAM_BEFORE_RUN=true
+PERSIST_REFRESHED_YANDEX_IAM_TO_ENV=true
+ENFORCE_LLM_READY=true
+```
+
+2. Make nightly script executable:
+```bash
+chmod +x /opt/b2b-contact-miner/scripts/run_nightly_pipeline.sh
+```
+
+3. Add cron entry (example: every day at 02:30):
+```bash
+crontab -e
+```
+```cron
+30 2 * * * /opt/b2b-contact-miner/scripts/run_nightly_pipeline.sh
+```
+
+4. Verify logs:
+```bash
+tail -f /opt/b2b-contact-miner/logs/pipeline_nightly.log
+```
+
 ### Monitor System
 ```bash
 # Check Nginx status

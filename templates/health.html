@@ -6,219 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        
-        header {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            margin-bottom: 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        h1 {
-            color: #667eea;
-            font-size: 2em;
-        }
-        
-        .back-link {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 25px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: transform 0.2s;
-        }
-        
-        .back-link:hover {
-            transform: translateY(-2px);
-        }
-        
-        .health-section {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-        }
-        
-        .health-section h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .status-indicator {
-            display: inline-block;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            margin-right: 10px;
-        }
-        
-        .status-healthy {
-            background: #28a745;
-            box-shadow: 0 0 10px #28a745;
-        }
-        
-        .status-unhealthy {
-            background: #dc3545;
-            box-shadow: 0 0 10px #dc3545;
-        }
-        
-        .status-pending {
-            background: #ffc107;
-            box-shadow: 0 0 10px #ffc107;
-        }
-        
-        .service-card {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            border-left: 4px solid #667eea;
-            transition: all 0.3s;
-        }
-        
-        .service-card:hover {
-            transform: translateX(5px);
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        }
-        
-        .service-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .service-name {
-            font-size: 1.2em;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .service-status {
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: 500;
-        }
-        
-        .badge-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .badge-danger {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .badge-warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .timestamp {
-            color: #666;
-            font-size: 0.9em;
-            margin-top: 10px;
-        }
-        
-        .overall-status {
-            text-align: center;
-            padding: 30px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-            font-size: 1.5em;
-            font-weight: bold;
-        }
-        
-        .overall-healthy {
-            background: #d4edda;
-            color: #155724;
-            border: 3px solid #28a745;
-        }
-        
-        .overall-unhealthy {
-            background: #f8d7da;
-            color: #721c24;
-            border: 3px solid #dc3545;
-        }
-        
-        .refresh-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 500;
-            transition: all 0.2s;
-            margin-top: 20px;
-        }
-        
-        .refresh-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .refresh-btn:active {
-            transform: translateY(0);
-        }
-        
-        .refresh-btn.loading {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .auto-refresh {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 15px;
-            color: #666;
-        }
-        
-        .auto-refresh input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-        
-        code {
-            background: #f4f4f4;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            color: #667eea;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/health.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -236,7 +24,7 @@
         <div class="health-section">
             <h2>🔍 Полная проверка здоровья</h2>
             <div id="full-health">
-                <p style="color: #666;">Загрузка данных...</p>
+                <p class="text-muted">Загрузка данных...</p>
             </div>
             <button class="refresh-btn" id="btn-full-health" onclick="loadFullHealth()">🔄 Обновить</button>
             <div class="auto-refresh">
@@ -248,7 +36,7 @@
         <div class="health-section">
             <h2>❤️ Проверка живости (Liveness)</h2>
             <div id="liveness">
-                <p style="color: #666;">Загрузка данных...</p>
+                <p class="text-muted">Загрузка данных...</p>
             </div>
             <button class="refresh-btn" id="btn-liveness" onclick="loadLiveness()">🔄 Обновить</button>
         </div>
@@ -256,7 +44,7 @@
         <div class="health-section">
             <h2>✅ Проверка готовности (Readiness)</h2>
             <div id="readiness">
-                <p style="color: #666;">Загрузка данных...</p>
+                <p class="text-muted">Загрузка данных...</p>
             </div>
             <button class="refresh-btn" id="btn-readiness" onclick="loadReadiness()">🔄 Обновить</button>
         </div>
@@ -268,8 +56,8 @@
                     <span class="service-name">Статистика системы</span>
                     <code>/api/stats</code>
                 </div>
-                <p style="color: #666; margin-top: 10px;">Возвращает полную статистику по ключевым словам, доменам и контактам</p>
-                <a href="/api/stats" target="_blank" class="refresh-btn" style="display: inline-block; margin-top: 10px; text-decoration: none;">Открыть →</a>
+                <p class="text-muted mt-10">Возвращает полную статистику по ключевым словам, доменам и контактам</p>
+                <a href="/api/stats" target="_blank" class="refresh-btn inline-link-btn">Открыть →</a>
             </div>
             
             <div class="service-card">
@@ -277,20 +65,20 @@
                     <span class="service-name">Список ключевых слов</span>
                     <code>/api/keywords</code>
                 </div>
-                <p style="color: #666; margin-top: 10px;">Возвращает массив всех ключевых слов с метаданными</p>
-                <a href="/api/keywords" target="_blank" class="refresh-btn" style="display: inline-block; margin-top: 10px; text-decoration: none;">Открыть →</a>
+                <p class="text-muted mt-10">Возвращает массив всех ключевых слов с метаданными</p>
+                <a href="/api/keywords" target="_blank" class="refresh-btn inline-link-btn">Открыть →</a>
             </div>
             
-            <div class="service-card" style="border-left-color: #28a745;">
+            <div class="service-card service-card-success">
                 <div class="service-header">
                     <span class="service-name">📥 Экспорт контактов (CSV)</span>
                     <code>/api/export/flat-csv</code>
                 </div>
-                <p style="color: #666; margin-top: 10px;">
+                <p class="text-muted mt-10">
                     Скачать все контакты в формате CSV с полями:<br>
                     № | Ключевое слово | Страна | Язык | Домен | Email | Telegram | LinkedIn | Телефон | Предметная область
                 </p>
-                <a href="/api/export/flat-csv" class="refresh-btn" style="display: inline-block; margin-top: 10px; text-decoration: none; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">⬇️ Скачать CSV</a>
+                <a href="/api/export/flat-csv" class="refresh-btn inline-link-btn csv-download-btn">⬇️ Скачать CSV</a>
             </div>
         </div>
         
@@ -298,239 +86,12 @@
         <div class="health-section">
             <h2>⚙️ Настройки Crawler</h2>
             <div id="crawlerSettings">
-                <p style="color: #666;">Загрузка настроек...</p>
+                <p class="text-muted">Загрузка настроек...</p>
             </div>
         </div>
     </div>
 {% endblock %}
 
 {% block extra_scripts %}
-    <script>
-        let autoRefreshInterval = null;
-        
-        function formatTimestamp(isoString) {
-            const date = new Date(isoString);
-            return date.toLocaleString('ru-RU');
-        }
-        
-        function getStatusBadge(status) {
-            if (status === 'healthy' || status === 'alive' || status === 'ready') {
-                return '<span class="service-status badge-success">✓ ' + status + '</span>';
-            } else if (status === 'unhealthy' || status === 'not_ready') {
-                return '<span class="service-status badge-danger">✗ ' + status + '</span>';
-            } else if (status === 'not_configured') {
-                return '<span class="service-status badge-warning">⚙ не настроено</span>';
-            } else if (status === 'not_running') {
-                return '<span class="service-status badge-warning">⏸ не запущено</span>';
-            } else {
-                return '<span class="service-status badge-warning">⏳ ' + status + '</span>';
-            }
-        }
-        
-                function loadFullHealth() {
-            console.log('Loading full health check...');
-            const btn = document.getElementById('btn-full-health');
-            if (btn) {
-                btn.classList.add('loading');
-                btn.textContent = '⏳ Загрузка...';
-            }
-            
-            fetch('/health', { cache: 'no-cache' })
-                .then(response => {
-                    console.log('Response status:', response.status);
-                    if (!response.ok) {
-                        throw new Error('HTTP error! status: ' + response.status);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Health data received:', data);
-                    
-                    // Update overall status
-                    const overallStatus = document.getElementById('overall-status');
-                    if (data.status === 'healthy') {
-                        overallStatus.className = 'overall-status overall-healthy';
-                        overallStatus.innerHTML = '<span class="status-indicator status-healthy"></span> Система работает нормально';
-                    } else {
-                        overallStatus.className = 'overall-status overall-unhealthy';
-                        overallStatus.innerHTML = '<span class="status-indicator status-unhealthy"></span> Обнаружены проблемы';
-                    }
-                    
-                    // Build HTML from flat data structure
-                    let html = '<div class="timestamp">Последняя проверка: ' + formatTimestamp(data.timestamp) + '</div>';
-                    
-                    // Display database status
-                    if (data.database) {
-                        const dbStatus = data.database === 'healthy' ? 'healthy' : 'unhealthy';
-                        html += `
-                            <div class="service-card">
-                                <div class="service-header">
-                                    <span class="service-name">Database</span>
-                                    ${getStatusBadge(dbStatus)}
-                                </div>
-                                <p style="color: #666; margin-top: 10px;">${data.database}</p>
-                            </div>
-                        `;
-                    }
-                    
-                    // Display web server status
-                    if (data.web_server) {
-                        html += `
-                            <div class="service-card">
-                                <div class="service-header">
-                                    <span class="service-name">Web Server</span>
-                                    ${getStatusBadge('healthy')}
-                                </div>
-                                <p style="color: #666; margin-top: 10px;">${data.web_server}</p>
-                            </div>
-                        `;
-                    }
-                    
-                    // Display monitoring service status
-                    if (data.monitoring_service) {
-                        const monStatus = data.monitoring_service === 'running' ? 'healthy' : 'warning';
-                        html += `
-                            <div class="service-card">
-                                <div class="service-header">
-                                    <span class="service-name">Monitoring Service</span>
-                                    ${getStatusBadge(monStatus)}
-                                </div>
-                                <p style="color: #666; margin-top: 10px;">${data.monitoring_service}</p>
-                            </div>
-                        `;
-                    }
-                    
-                    document.getElementById('full-health').innerHTML = html;
-                    console.log('Full health updated successfully');
-                })
-                .catch(error => {
-                    console.error('Error loading health:', error);
-                    document.getElementById('full-health').innerHTML = '<p style="color: #dc3545;">Ошибка загрузки: ' + error.message + '</p>';
-                })
-                .finally(() => {
-                    if (btn) {
-                        btn.classList.remove('loading');
-                        btn.textContent = '🔄 Обновить';
-                    }
-                });
-        }
-        
-        function loadLiveness() {
-            console.log('Loading liveness check...');
-            fetch('/health/live', { cache: 'no-cache' })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Liveness data:', data);
-                    let html = '<div class="timestamp">Время: ' + formatTimestamp(data.timestamp) + '</div>';
-                    html += '<div class="service-card"><div class="service-header"><span class="service-name">Статус приложения</span>' + getStatusBadge(data.status) + '</div></div>';
-                    document.getElementById('liveness').innerHTML = html;
-                })
-                .catch(error => {
-                    console.error('Error loading liveness:', error);
-                    document.getElementById('liveness').innerHTML = '<p style="color: #dc3545;">Ошибка загрузки: ' + error.message + '</p>';
-                });
-        }
-        
-        function loadReadiness() {
-            console.log('Loading readiness check...');
-            fetch('/health/ready', { cache: 'no-cache' })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Readiness data:', data);
-                    let html = '<div class="timestamp">Время: ' + formatTimestamp(data.timestamp) + '</div>';
-                    html += '<div class="service-card"><div class="service-header"><span class="service-name">Готовность к работе</span>' + getStatusBadge(data.status) + '</div></div>';
-                    if (data.error) {
-                        html += '<p style="color: #dc3545; margin-top: 10px;">Ошибка: ' + data.error + '</p>';
-                    }
-                    document.getElementById('readiness').innerHTML = html;
-                })
-                .catch(error => {
-                    console.error('Error loading readiness:', error);
-                    document.getElementById('readiness').innerHTML = '<p style="color: #dc3545;">Ошибка загрузки: ' + error.message + '</p>';
-                });
-        }
-        
-        function toggleAutoRefresh() {
-            const checkbox = document.getElementById('auto-refresh');
-            if (checkbox.checked) {
-                autoRefreshInterval = setInterval(() => {
-                    loadFullHealth();
-                    loadLiveness();
-                    loadReadiness();
-                }, 10000);
-            } else {
-                clearInterval(autoRefreshInterval);
-            }
-        }
-        
-        // Load crawler settings
-        async function loadCrawlerSettings() {
-            try {
-                const response = await fetch('/api/crawler-settings');
-                const data = await response.json();
-                
-                const container = document.getElementById('crawlerSettings');
-                container.innerHTML = `
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                        <div class="service-card">
-                            <div class="service-header">
-                                <span class="service-name">Domain Crawl Timeout</span>
-                            </div>
-                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.domain_crawl_timeout}s</p>
-                            <p style="color: #666; font-size: 0.9em;">Максимальное время на crawling одного домена</p>
-                        </div>
-                        
-                        <div class="service-card">
-                            <div class="service-header">
-                                <span class="service-name">Request Timeout</span>
-                            </div>
-                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.request_timeout}s</p>
-                            <p style="color: #666; font-size: 0.9em;">Timeout на одну страницу</p>
-                        </div>
-                        
-                        <div class="service-card">
-                            <div class="service-header">
-                                <span class="service-name">Max Pages per Domain</span>
-                            </div>
-                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.max_pages_per_domain}</p>
-                            <p style="color: #666; font-size: 0.9em;">Максимум страниц на домен</p>
-                        </div>
-                        
-                        <div class="service-card">
-                            <div class="service-header">
-                                <span class="service-name">Search Results per Keyword</span>
-                            </div>
-                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.search_results_per_keyword}</p>
-                            <p style="color: #666; font-size: 0.9em;">Количество сайтов для обработки</p>
-                        </div>
-                        
-                        <div class="service-card">
-                            <div class="service-header">
-                                <span class="service-name">Concurrent Browsers</span>
-                            </div>
-                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.concurrent_browsers}</p>
-                            <p style="color: #666; font-size: 0.9em;">Параллельных браузеров</p>
-                        </div>
-                        
-                        <div class="service-card">
-                            <div class="service-header">
-                                <span class="service-name">Delay Between Requests</span>
-                            </div>
-                            <p style="font-size: 2em; font-weight: bold; color: #667eea; margin: 10px 0;">${data.delay_between_requests}s</p>
-                            <p style="color: #666; font-size: 0.9em;">Задержка между запросами</p>
-                        </div>
-                    </div>
-                `;
-            } catch (error) {
-                console.error('Error loading crawler settings:', error);
-                document.getElementById('crawlerSettings').innerHTML = '<p style="color: #dc3545;">Ошибка загрузки настроек</p>';
-            }
-        }
-        
-        // Initial load
-        loadFullHealth();
-        loadLiveness();
-        loadReadiness();
-        loadCrawlerSettings();
-    </script>
+    <script src="{{ url_for('static', filename='js/health.js') }}"></script>
 {% endblock %}

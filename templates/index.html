@@ -44,19 +44,19 @@
         
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value" style="color: #28a745;">{{ email_count }}</div>
+                <div class="stat-value stat-email">{{ email_count }}</div>
                 <div class="stat-label">📧 Email</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" style="color: #007bff;">{{ telegram_count }}</div>
+                <div class="stat-value stat-telegram">{{ telegram_count }}</div>
                 <div class="stat-label">✈️ Telegram</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" style="color: #0077b5;">{{ linkedin_count }}</div>
+                <div class="stat-value stat-linkedin">{{ linkedin_count }}</div>
                 <div class="stat-label">💼 LinkedIn</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" style="color: #ffc107;">{{ phone_count }}</div>
+                <div class="stat-value stat-phone">{{ phone_count }}</div>
                 <div class="stat-label">📱 Телефон</div>
             </div>
         </div>
@@ -78,7 +78,7 @@
                             {% endfor %}
                             <option value="__custom__">Свой язык...</option>
                         </select>
-                        <input type="text" name="custom_language" placeholder="например: es" style="margin-top:8px;">
+                        <input type="text" name="custom_language" placeholder="например: es" class="input-mt">
                     </div>
                     <div class="form-group">
                         <label for="country">Страна:</label>
@@ -88,7 +88,7 @@
                             {% endfor %}
                             <option value="__custom__">Своя страна...</option>
                         </select>
-                        <input type="text" name="custom_country" placeholder="например: ES" style="margin-top:8px;">
+                        <input type="text" name="custom_country" placeholder="например: ES" class="input-mt">
                     </div>
                 </div>
                 <button type="submit">Добавить ключевое слово</button>
@@ -113,7 +113,7 @@
                             {% endfor %}
                             <option value="__custom__">Свой язык...</option>
                         </select>
-                        <input type="text" name="custom_language" placeholder="например: es" style="margin-top:8px;">
+                        <input type="text" name="custom_language" placeholder="например: es" class="input-mt">
                     </div>
                     <div class="form-group">
                         <label for="bulk_country">Страна:</label>
@@ -123,7 +123,7 @@
                             {% endfor %}
                             <option value="__custom__">Своя страна...</option>
                         </select>
-                        <input type="text" name="custom_country" placeholder="например: ES" style="margin-top:8px;">
+                        <input type="text" name="custom_country" placeholder="например: ES" class="input-mt">
                     </div>
                 </div>
                 <button type="submit">Добавить списком</button>
@@ -162,7 +162,7 @@
                 </tbody>
             </table>
             {% else %}
-            <p style="color: #666; text-align: center; padding: 20px;">Пока нет ключевых слов. Добавьте первое!</p>
+            <p class="empty-state-sm">Пока нет ключевых слов. Добавьте первое!</p>
             {% endif %}
         </div>
 
@@ -190,7 +190,7 @@
                 </tbody>
             </table>
             {% else %}
-            <p style="color: #666; text-align: center; padding: 20px;">Контактов пока нет.</p>
+            <p class="empty-state-sm">Контактов пока нет.</p>
             {% endif %}
         </div>
         

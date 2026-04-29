@@ -67,6 +67,22 @@ h1 {
     font-size: 1em;
 }
 
+.stat-email {
+    color: #28a745;
+}
+
+.stat-telegram {
+    color: #007bff;
+}
+
+.stat-linkedin {
+    color: #0077b5;
+}
+
+.stat-phone {
+    color: #ffc107;
+}
+
 .form-section {
     background: white;
     padding: 30px;
@@ -121,6 +137,10 @@ input[type="text"]:focus, textarea:focus, select:focus {
     color: #666;
     font-size: 0.9em;
     margin-top: 6px;
+}
+
+.input-mt {
+    margin-top: 8px;
 }
 
 button {
@@ -245,4 +265,10 @@ tr:hover {
 .nav-link:hover {
     background: #667eea;
     color: white;
+}
+
+.empty-state-sm {
+    color: #666;
+    text-align: center;
+    padding: 20px;
 }

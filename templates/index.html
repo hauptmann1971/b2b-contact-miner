@@ -313,6 +313,7 @@
         <div class="form-section">
             <h2>➕ Добавить новое ключевое слово</h2>
             <form method="POST" action="{{ url_for('add_keyword') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="keyword">Ключевое слово:</label>
@@ -346,6 +347,7 @@
         <div class="form-section">
             <h2>📥 Массовый ввод ключевых слов</h2>
             <form method="POST" action="{{ url_for('add_keywords_bulk') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label for="bulk_keywords">Ключевые слова (по одному на строку):</label>
                     <textarea id="bulk_keywords" name="bulk_keywords" rows="8" placeholder="финтех стартап&#10;b2b saas crm&#10;логистика ai платформа"></textarea>

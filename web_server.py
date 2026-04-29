@@ -1,12 +1,13 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, Response
 from sqlalchemy import func, desc, text
-from datetime import datetime, timezone, timezone
+from datetime import datetime, timezone
 import sys
 import os
 import secrets
 import json
 import logging
 import re
+from functools import wraps
 from pathlib import Path
 
 # Add parent directory to path
@@ -21,6 +22,62 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LANGUAGES = ['ru', 'en', 'kk', 'uz', 'ky', 'tg', 'az', 'hy', 'ka', 'be', 'ro', 'de', 'fr']
 DEFAULT_COUNTRIES = ['RU', 'KZ', 'UZ', 'KG', 'TJ', 'TM', 'AZ', 'AM', 'GE', 'BY', 'MD', 'UA', 'MN', 'AF', 'PK', 'US', 'GB', 'DE', 'FR']
+
+
+def _get_csrf_token() -> str:
+    token = session.get('_csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['_csrf_token'] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": _get_csrf_token}
+
+
+@app.before_request
+def validate_csrf():
+    if app.config.get("TESTING"):
+        return
+    if request.method != 'POST':
+        return
+    sent_token = request.form.get('_csrf_token') or request.headers.get('X-CSRF-Token')
+    session_token = session.get('_csrf_token')
+    if not sent_token or not session_token or not secrets.compare_digest(sent_token, session_token):
+        return jsonify({"error": "CSRF validation failed"}), 400
+
+
+def _admin_auth_enabled() -> bool:
+    return bool(os.getenv("ADMIN_USERNAME") and os.getenv("ADMIN_PASSWORD"))
+
+
+def _check_admin_auth() -> bool:
+    if not _admin_auth_enabled():
+        return True
+    expected_user = os.getenv("ADMIN_USERNAME", "")
+    expected_password = os.getenv("ADMIN_PASSWORD", "")
+    auth = request.authorization
+    if not auth:
+        return False
+    return (
+        secrets.compare_digest(auth.username or "", expected_user)
+        and secrets.compare_digest(auth.password or "", expected_password)
+    )
+
+
+def _admin_auth_required(view_func):
+    @wraps(view_func)
+    def wrapped(*args, **kwargs):
+        if _check_admin_auth():
+            return view_func(*args, **kwargs)
+        return Response(
+            "Authentication required",
+            401,
+            {"WWW-Authenticate": 'Basic realm="Admin Console"'},
+        )
+    return wrapped
 
 
 def _sanitize_keyword_text(value: str) -> str:
@@ -161,6 +218,7 @@ def user_workspace():
 
 
 @app.route('/admin')
+@_admin_auth_required
 def admin_dashboard():
     """Отдельная admin-страница (мониторинг системы и воркеров)."""
     db = SessionLocal()
@@ -226,6 +284,7 @@ def admin_dashboard():
 
 
 @app.route('/admin/actions/recover-stale', methods=['POST'])
+@_admin_auth_required
 def admin_recover_stale():
     """Recover stale running tasks by returning them to pending state."""
     db = SessionLocal()
@@ -258,6 +317,7 @@ def admin_recover_stale():
 
 
 @app.route('/admin/actions/retry-failed', methods=['POST'])
+@_admin_auth_required
 def admin_retry_failed():
     """Move recent failed tasks back to pending for retry."""
     db = SessionLocal()
@@ -503,12 +563,14 @@ def health_check_page():
 
 
 @app.route('/llm-data')
+@_admin_auth_required
 def llm_data_page():
     """Страница для просмотра LLM и search данных"""
     return render_template('llm_data.html')
 
 
 @app.route('/api/llm-data')
+@_admin_auth_required
 def api_llm_data():
     """API endpoint для получения LLM и search данных"""
     expected_token = os.getenv("LLM_DATA_API_TOKEN")
@@ -594,6 +656,7 @@ def api_llm_data():
 
 
 @app.route('/api-docs')
+@_admin_auth_required
 def api_docs_page():
     """Страница документации API"""
     return render_template('api_docs.html')
@@ -741,7 +804,6 @@ def export_flat_csv():
         export_service = ExportService(db)
         csv_data = export_service.export_to_flat_csv()
         
-        from flask import Response
         return Response(
             csv_data,
             mimetype='text/csv',
@@ -766,5 +828,5 @@ if __name__ == '__main__':
     app.run(
         host='127.0.0.1',  # Changed from '0.0.0.0' for security
         port=5000,
-        debug=True
+        debug=os.getenv("FLASK_DEBUG", "false").strip().lower() == "true"
     )

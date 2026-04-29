@@ -1,9 +1,9 @@
 # 🚀 B2B Contact Miner - Deployment Guide for Ubuntu Server
 
 ## Server Information
-- **Host**: 85.198.86.237
-- **User**: root
-- **Password**: r0M4n0v_
+- **Host**: `<your-server-host>`
+- **User**: `<your-admin-user>`
+- **Password**: `<use-secure-password-or-ssh-keys>`
 
 ---
 
@@ -13,8 +13,8 @@
 
 1. Connect to server:
 ```bash
-ssh root@85.198.86.237
-# Password: r0M4n0v_
+ssh <your-admin-user>@<your-server-host>
+# Prefer SSH keys; avoid password auth in production.
 ```
 
 2. Run the automated deployment script:

@@ -11,7 +11,7 @@
 
 При запуске активируются следующие сервисы:
 
-1. **Redis** (опционально, через Docker) - кэширование и очереди задач
+1. **Redis** (опционально, через Docker) - дополнительный кэш (не обязателен для пайплайна)
 2. **MySQL** (опционально, через Docker) - база данных
 3. **FastAPI Monitoring Server** (порт 8000) - health check и мониторинг
 4. **Flask Web Server** (порт 5000) - веб-интерфейс пользователя
@@ -56,7 +56,7 @@ start_all.bat start
 ```
 
 **Что происходит:**
-1. Проверяет и запускает Docker контейнеры (Redis + MySQL)
+1. Проверяет и запускает Docker контейнеры (MySQL и опционально Redis)
 2. Запускает FastAPI сервер мониторинга на порту 8000
 3. Запускает Flask веб-сервер на порту 5000
 4. Запускает планировщик задач
@@ -69,7 +69,7 @@ start_all.bat start
 ========================================
 
 [1/6] Checking Docker services...
-Starting Redis and MySQL with Docker...
+Starting MySQL (and optional Redis) with Docker...
 
 [2/6] Starting FastAPI Monitoring Server (port 8000)...
 monitoring started (PID: 12345, Log: logs/monitoring.log)
@@ -151,7 +151,6 @@ Service Status:
 
 Docker Services:
 NAME                STATUS              PORTS
-redis               Up 2 hours          0.0.0.0:6379->6379/tcp
 mysql               Up 2 hours          0.0.0.0:3306->3306/tcp
 
 Recent Logs:
@@ -333,7 +332,7 @@ sudo systemctl start b2b-contact-miner
 - Скачайте с https://www.docker.com/products/docker-desktop
 - Запустите и дождитесь полной инициализации
 
-Или используйте локальные установки Redis и MySQL без Docker.
+Или используйте локальную установку MySQL без Docker (Redis не обязателен).
 
 ### PID файл существует, но процесс не работает
 
@@ -378,11 +377,7 @@ tail -n 50 logs/web_server.log
 
 ### Настройки воркеров
 
-В `workers/task_worker.py` можно настроить количество одновременных задач:
-
-```python
-task_queue = AsyncTaskQueue(max_concurrent=20)  # Измените число
-```
+Параметры воркеров и очереди задаются через DB task queue (`workers/db_task_queue.py`) и настройки в `.env`/`config/settings.py`.
 
 ### Настройки пула БД
 

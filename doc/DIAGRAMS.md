@@ -7,7 +7,6 @@ graph TB
     User[Пользователь] -->|Запускает| Main[main.py<br/>ContactMiningPipeline]
     
     Main -->|Инициализирует| DB[(MySQL Database)]
-    Main -->|Подключается к| Redis[(Redis Cache)]
     Main -->|Создает| Workers[Task Workers<br/>20 async workers]
     
     Main -->|Использует| KeywordSvc[Keyword Service]
@@ -24,7 +23,6 @@ graph TB
     
     style Main fill:#e1f5ff
     style DB fill:#fff4e1
-    style Redis fill:#fff4e1
     style Internet fill:#f0f0f0
 ```
 
@@ -218,7 +216,7 @@ erDiagram
 ```mermaid
 graph TB
     subgraph "Task Queue System"
-        Q[AsyncIO Queue<br/>maxsize=1000]
+        Q[(MySQL task_queue table)]
         
         subgraph "Workers Pool"
             W1[Worker 1]
@@ -230,18 +228,18 @@ graph TB
     end
     
     Main[Main Pipeline] -->|add_task| Q
-    Q -->|get task| W1
-    Q -->|get task| W2
-    Q -->|get task| W3
-    Q -->|get task| W20
+    Q -->|lock & fetch task| W1
+    Q -->|lock & fetch task| W2
+    Q -->|lock & fetch task| W3
+    Q -->|lock & fetch task| W20
     
     W1 -->|execute| Task1[Crawl Domain]
     W2 -->|execute| Task2[Extract Contacts]
-    W3 -->|execute| Task3[Verify Email]
+    W3 -->|execute| Task3[Save/Retry Task]
     
-    Task1 -->|done| Q
-    Task2 -->|done| Q
-    Task3 -->|done| Q
+    Task1 -->|status update| Q
+    Task2 -->|status update| Q
+    Task3 -->|status update| Q
     
     style Q fill:#FFE4B5
     style W1 fill:#90EE90
@@ -342,7 +340,7 @@ graph LR
         R3[Graceful Shutdown<br/>Ctrl+C handler]
         R4[Connection Pool<br/>SQLAlchemy]
         R5[Rate Limiting<br/>Semaphores]
-        R6[Deduplication<br/>Redis/Memory]
+        R6[Deduplication<br/>Domain/DB rules]
     end
     
     R1 --> Protect[Защита от сбоев]

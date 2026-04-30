@@ -111,7 +111,7 @@ supervisorctl restart all
 
 # Set permissions
 echo "Setting permissions..."
-chmod +x /opt/b2b-contact-miner/*.py
+find /opt/b2b-contact-miner -maxdepth 1 -type f -name "*.py" -exec chmod u+x,go-w {} \;
 
 echo ""
 echo "=========================================="

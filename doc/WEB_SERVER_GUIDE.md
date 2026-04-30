@@ -27,7 +27,7 @@ python web_server.py
 ### Health Check страница (`/health-check`)
 - **Визуальный интерфейс** для мониторинга здоровья системы
 - **Три типа проверок**:
-  - Полная проверка здоровья (БД + Redis)
+  - Полная проверка здоровья (БД + внутренние сервисы)
   - Проверка живости (Liveness)
   - Проверка готовности (Readiness)
 - **Автообновление** каждые 10 секунд (опционально)
@@ -68,8 +68,7 @@ python web_server.py
   "status": "healthy",
   "timestamp": "2026-04-10T15:30:00",
   "services": {
-    "database": "healthy",
-    "redis": "healthy"
+    "database": "healthy"
   }
 }
 ```

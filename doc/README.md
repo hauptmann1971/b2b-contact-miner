@@ -10,9 +10,9 @@
 - **[HOW_IT_WORKS.md](HOW_IT_WORKS.md)** - Простое объяснение работы проекта
 
 ### Настройка и установка
-- **[REDIS_SETUP.md](REDIS_SETUP.md)** - Установка и настройка Redis на Windows
+- **[REDIS_SETUP.md](REDIS_SETUP.md)** - Опциональная установка Redis на Windows
 - **[DOCKER_SETUP.md](DOCKER_SETUP.md)** - Docker конфигурация и инструкции
-  - `docker-compose.yml` - Конфигурация для запуска Redis и MySQL
+  - `docker-compose.yml` - Конфигурация для запуска MySQL и опционального Redis
 - **[MYSQL_SETUP.md](MYSQL_SETUP.md)** - Настройка MySQL базы данных
 - **[INSTALL_DEPS.md](INSTALL_DEPS.md)** - Установка зависимостей
 - **[API_KEYS_SETUP.md](API_KEYS_SETUP.md)** - Настройка API ключей
@@ -35,7 +35,7 @@
 ## 🗄️ Конфигурационные файлы
 
 - **`setup_mysql.sql`** - SQL скрипт для инициализации базы данных
-- **`docker-compose.yml`** - Docker Compose конфигурация для Redis и MySQL
+- **`docker-compose.yml`** - Docker Compose конфигурация для MySQL и опционального Redis
 
 ## 📝 Структура документации
 
@@ -44,7 +44,7 @@ doc/
 ├── ARCHITECTURE.md              # Архитектура системы
 ├── DIAGRAMS.md                  # Диаграммы
 ├── HOW_IT_WORKS.md             # Как работает проект
-├── REDIS_SETUP.md              # Настройка Redis
+├── REDIS_SETUP.md              # Опциональная настройка Redis
 ├── DOCKER_SETUP.md             # Docker setup
 ├── MYSQL_SETUP.md              # Настройка MySQL
 ├── INSTALL_DEPS.md             # Установка зависимостей
@@ -67,5 +67,5 @@ doc/
 - [Начало работы →](README.md)
 - [Архитектура →](ARCHITECTURE.md)
 - [Docker Setup →](DOCKER_SETUP.md)
-- [Redis Setup →](REDIS_SETUP.md)
+- [Redis Setup (optional) →](REDIS_SETUP.md)
 - [Как работает →](HOW_IT_WORKS.md)

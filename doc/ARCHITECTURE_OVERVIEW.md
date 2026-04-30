@@ -67,7 +67,6 @@ User → Web UI (Flask) → MySQL Database
 
 **Infrastructure:**
 - MySQL 8.x (Database)
-- Redis 7.x (Cache)
 - Nginx (Reverse proxy)
 - Supervisor (Process manager)
 

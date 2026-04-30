@@ -28,8 +28,8 @@
 
 **Замените:**
 ```python
-from workers.task_worker import AsyncTaskQueue
-task_queue = AsyncTaskQueue(max_concurrent=20)
+from workers.db_task_queue import DatabaseTaskQueue
+task_queue = DatabaseTaskQueue()
 ```
 
 **На:**

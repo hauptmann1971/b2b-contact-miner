@@ -60,7 +60,7 @@ class ContactMiningPipeline:
 
 ```python
 async def run_pipeline(self):
-    await self.initialize()  # Инициализация Redis и worker'ов
+    await self.initialize()  # Инициализация worker'ов и сервисов
     
     db = SessionLocal()
     pending_keywords = keyword_service.get_pending_keywords()
@@ -70,8 +70,8 @@ async def run_pipeline(self):
 ```
 
 **Шаги:**
-1. Подключение к Redis (опционально, для дедупликации)
-2. Запуск 20 асинхронных worker'ов
+1. Инициализация очереди задач в базе данных
+2. Запуск worker-процессов
 3. Получение списка необработанных ключевых слов
 4. Последовательная обработка каждого ключевого слова
 
@@ -174,7 +174,7 @@ def search(query, country="RU", language="ru", num_results=10):
 **Как работает:**
 ```python
 async def crawl_domain(base_url):
-    # 1. Проверяет кэш (Redis или in-memory)
+    # 1. Подготавливает окружение краулинга и проверки robots.txt
     # 2. Запускает браузер Chromium (headless)
     # 3. Загружает sitemap.xml (если есть)
     # 4. Строит приоритизированную очередь URL
@@ -239,32 +239,31 @@ ContactInfo(
 
 ---
 
-### **E. Task Worker** (`workers/task_worker.py`)
+### **E. Task Queue Worker** (`workers/db_task_queue.py`)
 
-**Ответственность:** Асинхронная очередь задач (замена Celery)
+**Ответственность:** Персистентная очередь задач на MySQL (DB-backed queue)
 
 **Архитектура:**
 ```
-┌─────────────┐
-│   Queue     │ ← asyncio.Queue(maxsize=1000)
-└──────┬──────┘
-       │
-  ┌────┼────┐
-  │    │    │
-  ▼    ▼    ▼
-W1   W2   ... W20  ← 20 worker'ов обрабатывают задачи параллельно
+┌───────────────────┐
+│   task_queue      │ ← MySQL table
+└─────────┬─────────┘
+          │
+     ┌────┴────┐
+     │ Workers │  ← воркеры берут/блокируют задачи из БД
+     └─────────┘
 ```
 
 **Как работает:**
 ```python
 # Добавление задачи
-await task_queue.add_task(crawl_function, url="...")
+db_task_queue.add_task(...)
 
-# Worker автоматически:
-# 1. Берет задачу из очереди
-# 2. Выполняет async функцию
-# 3. Обрабатывает ошибки
-# 4. Переходит к следующей задаче
+# Worker:
+# 1. Берет pending-задачу из task_queue
+# 2. Ставит блокировку (locked_by/locked_at)
+# 3. Выполняет обработчик
+# 4. Обновляет статус completed/failed с retry
 ```
 
 ---
@@ -452,9 +451,9 @@ curl http://localhost:8000/health
 ```
 
 Возвращает:
-- Статус Redis
-- Количество worker'ов
-- Размер очереди задач
+- Статус базы данных
+- Метрики task queue
+- Состояние воркеров/планировщика
 - Статистику пайплайна
 
 ---

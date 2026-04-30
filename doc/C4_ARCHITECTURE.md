@@ -14,7 +14,6 @@ graph TB
     System -->|Crawls| Websites[Target Websites]
     System -->|Extracts with| LLM[LLM Service<br/>YandexGPT/GigaChat]
     System -->|Stores in| MySQL[(MySQL Database)]
-    System -->|Caches in| Redis[(Redis Cache)]
     
     System -->|Monitored by| SonarCloud[SonarCloud<br/>Code Quality]
     System -->|Deployed on| Server[Production Server<br/>85.198.86.237]
@@ -22,7 +21,6 @@ graph TB
     style System fill:#1168bd,color:#fff
     style User fill:#08427b,color:#fff
     style MySQL fill:#08427b,color:#fff
-    style Redis fill:#08427b,color:#fff
     style LLM fill:#08427b,color:#fff
     style SERP fill:#08427b,color:#fff
 ```
@@ -44,9 +42,6 @@ graph TB
         MainPipeline[Main Pipeline<br/>main.py] -->|Reads/Writes| MySQL
         MainPipeline -->|Task Queue| TaskQueue[Task Queue Worker<br/>workers/db_task_queue.py]
         TaskQueue -->|Reads/Writes| MySQL
-        
-        MainPipeline -->|Caches| Redis[(Redis Cache<br/>Local)]
-        TaskQueue -->|Uses| Redis
         
         Supervisor[Supervisor<br/>Process Manager] -->|Manages| FlaskApp
         Supervisor -->|Manages| FastAPI
@@ -72,7 +67,6 @@ graph TB
     style MainPipeline fill:#1168bd,color:#fff
     style TaskQueue fill:#1168bd,color:#fff
     style MySQL fill:#08427b,color:#fff
-    style Redis fill:#08427b,color:#fff
     style Nginx fill:#438dd5,color:#fff
 ```
 
@@ -83,7 +77,7 @@ graph TB
 4. **Main Pipeline** - Core contact mining orchestrator
 5. **Task Queue Worker** - Async task processing
 6. **MySQL Database** - Persistent data storage
-7. **Redis Cache** - Temporary caching and rate limiting
+7. **Database-backed Task Queue** - Persistent async processing in MySQL
 
 ---
 
@@ -153,7 +147,7 @@ graph TB
     subgraph "web_server.py - Flask Application"
         Browser[Web Browser] -->|HTTP Requests| FlaskRoutes[Flask Routes]
         
-        FlaskRoutes --> DashboardView[Dashboard View<br/>templates/dashboard.html]
+        FlaskRoutes --> DashboardView[Dashboard View<br/>templates/index.html]
         FlaskRoutes --> KeywordsView[Keywords Management<br/>templates/keywords.html]
         FlaskRoutes --> ContactsView[Contacts Viewer<br/>templates/contacts.html]
         FlaskRoutes --> HealthCheck[Health Check API<br/>/health endpoint]
@@ -172,17 +166,17 @@ graph TB
     
     subgraph "Templates"
         BaseTemplate[base.html<br/>base layout]
-        DashboardTemplate[dashboard.html<br/>main dashboard]
+        DashboardTemplate[index.html<br/>main dashboard]
         KeywordsTemplate[keywords.html<br/>keyword management]
         ContactsTemplate[contacts.html<br/>contact viewer]
-        SettingsTemplate[settings.html<br/>configuration]
+        LlmDataTemplate[llm_data.html<br/>LLM telemetry]
     end
     
     FlaskRoutes --> BaseTemplate
     DashboardView --> DashboardTemplate
     KeywordsView --> KeywordsTemplate
     ContactsView --> ContactsTemplate
-    FlaskRoutes --> SettingsTemplate
+    FlaskRoutes --> LlmDataTemplate
     
     style FlaskRoutes fill:#1168bd,color:#fff
     style DBQuery fill:#1168bd,color:#fff
@@ -399,7 +393,6 @@ graph TB
         FastAPI --> RemoteDB
         Pipeline --> RemoteDB
         
-        Pipeline --> LocalRedis[(Local Redis<br/>localhost:6379)]
     end
     
     User[End User] -->|http://85.198.86.237| Nginx
@@ -409,7 +402,6 @@ graph TB
     style GitHub fill:#438dd5,color:#fff
     style SonarCloud fill:#438dd5,color:#fff
     style RemoteDB fill:#08427b,color:#fff
-    style LocalRedis fill:#08427b,color:#fff
 ```
 
 ---
@@ -418,10 +410,9 @@ graph TB
 
 ### 1. Database Choice
 - **MySQL** for persistent storage (relational data, ACID compliance)
-- **Redis** for caching and rate limiting (fast key-value store)
 
 ### 2. Task Queue
-- **Database-backed queue** instead of Redis/RabbitMQ
+- **Database-backed queue** instead of external message brokers
 - Pros: Persistence, no extra infrastructure, easy monitoring
 - Cons: Slower than message brokers, but acceptable for this use case
 
@@ -452,7 +443,6 @@ graph TB
 | **Backend Web** | Flask 3.x | Web application framework |
 | **Backend API** | FastAPI | Monitoring and health check API |
 | **Database** | MySQL 8.x | Primary data storage |
-| **Cache** | Redis 7.x | Caching and rate limiting |
 | **Browser Automation** | Playwright | Website crawling |
 | **AI/ML** | YandexGPT, GigaChat | Contact extraction from HTML |
 | **Task Queue** | Custom DB-based | Async task processing |

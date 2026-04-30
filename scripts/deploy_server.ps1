@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Host,
+    [string]$ServerHost,
 
     [string]$User = "root",
     [string]$AppDir = "/opt/b2b-contact-miner",
@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $envPath = Join-Path $projectRoot ".env"
-$remote = "$User@$Host"
+$remote = "$User@$ServerHost"
 
 if ($CopyEnv -and -not (Test-Path -LiteralPath $envPath)) {
     throw ".env not found in project root: $envPath"
@@ -65,7 +65,8 @@ supervisorctl restart "$ServiceToRestart" || supervisorctl restart all
 "@
 
 Write-Host "Running remote deploy commands..."
-ssh -o StrictHostKeyChecking=accept-new $remote $remoteScript
+$remoteScript = $remoteScript -replace "`r", ""
+$remoteScript | ssh -o StrictHostKeyChecking=accept-new $remote "bash -s"
 
 if ($CopyEnv) {
     Write-Host "Uploading .env..."
@@ -78,10 +79,11 @@ cd "$AppDir"
 ./venv/bin/python -m scripts.test_yandex_token || true
 supervisorctl restart "$ServiceToRestart" || supervisorctl restart all
 "@
-    ssh -o StrictHostKeyChecking=accept-new $remote $verifyScript
+    $verifyScript = $verifyScript -replace "`r", ""
+    $verifyScript | ssh -o StrictHostKeyChecking=accept-new $remote "bash -s"
 }
 
 Write-Host ""
 Write-Host "Deployment completed."
 Write-Host "Server: $remote"
-Write-Host "Health: http://$Host/health-check"
+Write-Host "Health: http://$ServerHost/health-check"

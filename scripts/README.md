@@ -48,15 +48,15 @@ python script_name.py
   ```powershell
   # Basic deploy to your server + copy .env
   powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
-    -Host 85.198.86.237 -User root -AppDir /opt/b2b-contact-miner -Branch main
+    -ServerHost 85.198.86.237 -User root -AppDir /opt/b2b-contact-miner -Branch main
 
   # Deploy without dependency reinstall
   powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
-    -Host 85.198.86.237 -User root -InstallDeps:$false
+    -ServerHost 85.198.86.237 -User root -InstallDeps:$false
 
   # Deploy code only (without .env upload)
   powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
-    -Host 85.198.86.237 -User root -CopyEnv:$false
+    -ServerHost 85.198.86.237 -User root -CopyEnv:$false
   ```
 
 ### Testing & Validation

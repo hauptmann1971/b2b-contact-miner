@@ -44,6 +44,21 @@ python script_name.py
     -MinWithContactsRate 25 -MaxZeroPageRate 45 -MaxFailures 0
   ```
 
+- `deploy_server.ps1` - Deploy code to Linux server over SSH, optionally upload local `.env`, install deps, run migrations, and restart supervisor service
+  ```powershell
+  # Basic deploy to your server + copy .env
+  powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
+    -Host 85.198.86.237 -User root -AppDir /opt/b2b-contact-miner -Branch main
+
+  # Deploy without dependency reinstall
+  powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
+    -Host 85.198.86.237 -User root -InstallDeps:$false
+
+  # Deploy code only (without .env upload)
+  powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
+    -Host 85.198.86.237 -User root -CopyEnv:$false
+  ```
+
 ### Testing & Validation
 - `validate_setup.py` - Validate project setup and dependencies
 - `test_async_pipeline.py` - Test async pipeline functionality

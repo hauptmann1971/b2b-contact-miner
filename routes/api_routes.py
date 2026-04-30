@@ -1,6 +1,7 @@
 import json
 import os
 
+import requests
 from flask import Response, jsonify, request
 from sqlalchemy import desc
 
@@ -145,3 +146,15 @@ def register_api_routes(app, logger):
             return jsonify({"error": str(e)}), 500
         finally:
             db.close()
+
+    @app.route("/metrics/pipeline")
+    @admin_auth_required
+    def pipeline_metrics_proxy():
+        """Proxy pipeline metrics from monitoring service to Flask app."""
+        try:
+            upstream = requests.get("http://127.0.0.1:8000/metrics/pipeline", timeout=5)
+            content_type = upstream.headers.get("Content-Type", "application/json")
+            return Response(upstream.content, status=upstream.status_code, content_type=content_type)
+        except requests.RequestException as e:
+            logger.warning(f"Metrics proxy unavailable: {e}")
+            return jsonify({"error": "Monitoring service unavailable", "details": str(e)}), 503

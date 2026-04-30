@@ -34,8 +34,8 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Upgrade pip and install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+pip install --upgrade --only-binary :all: pip
+pip install --only-binary :all: -r requirements.txt
 
 # Install Playwright browsers
 echo "Installing Playwright browsers..."

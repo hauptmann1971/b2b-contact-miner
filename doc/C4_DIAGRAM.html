@@ -210,7 +210,7 @@
             <h3>🕷️ Crawl Layer</h3>
             <ul>
                 <li><code>Domain Crawler</code> - Playwright; <code>DomainRateLimiter</code> (per-domain semaphore, <code>MAX_CONCURRENT_DOMAINS_PER_SITE</code>); delay <code>DELAY_BETWEEN_REQUESTS</code> after each page; regex for sitemap <code>&lt;loc&gt;</code> URLs and quick contact hints in page text</li>
-                <li><code>Content Extractor</code> - Extracts HTML content for LLM</li>
+                <li><code>Content Extractor</code> - Regex/HTML contact patterns first; HTML content for selective LLM fallback</li>
             </ul>
         </div>
         

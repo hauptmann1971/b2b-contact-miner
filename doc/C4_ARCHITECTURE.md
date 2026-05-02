@@ -93,7 +93,7 @@ graph TB
         SERPGetter --> SearchResultProcessor[Search Result Processor<br/>services/crawler_service.py]
         
         SearchResultProcessor --> DomainCrawler[Domain Crawler<br/>Playwright; DomainRateLimiter per domain;<br/>delay between pages; regex e.g. sitemap loc, quick contact hints]
-        DomainCrawler --> ContentExtractor[Content Extractor<br/>services/extraction_service.py]
+        DomainCrawler --> ContentExtractor[Content Extractor<br/>services/extraction_service.py<br/>regex first, LLM fallback]
         
         ContentExtractor --> LLMCaller[LLM Caller<br/>calls YandexGPT/GigaChat]
         LLMCaller --> ContactParser[Contact Parser<br/>parses LLM response]
@@ -141,7 +141,7 @@ graph TB
 3. **Search Orchestrator** - Coordinates search → crawl → extract pipeline
 4. **SERP Getter** - Fetches search results from SERP API
 5. **Domain Crawler** - Playwright crawl with per-domain semaphore (`DomainRateLimiter`, `MAX_CONCURRENT_DOMAINS_PER_SITE`), `DELAY_BETWEEN_REQUESTS` between pages, and regex helpers (e.g. sitemap `<loc>`, quick contact hints in text)
-6. **Content Extractor** - Uses LLM to extract contacts from HTML
+6. **Content Extractor** - Regex/HTML pattern extraction first; selective LLM fallback for obfuscated contact pages (`extraction_service.py`)
 7. **Result Saver** - Saves extracted contacts to database
 8. **Task Queue Writer** - Inserts rows into `task_queue` for async workers (workers also read/update `task_queue` and persist crawl/results tables)
 
@@ -225,7 +225,7 @@ graph TB
     subgraph "Task Types"
         SearchTask[search_keyword<br/>Fetch SERP results]
         CrawlTask[crawl_domain<br/>Crawl website]
-        ExtractTask[extract_contacts<br/>LLM extraction]
+        ExtractTask[extract_contacts<br/>regex/HTML + LLM fallback]
         SaveTask[save_results<br/>Save to DB]
     end
     
@@ -259,7 +259,7 @@ graph TB
 graph LR
     subgraph "services/ - Business Logic"
         CrawlerService[crawler_service.py<br/>Website crawling]
-        ExtractionService[extraction_service.py<br/>LLM contact extraction]
+        ExtractionService[extraction_service.py<br/>regex/HTML extraction, LLM fallback]
         ExportService[export_service.py<br/>export_to_flat_csv, export_to_csv,<br/>export_to_excel, get_export_summary]
         KeywordService[keyword_service.py<br/>Keyword management]
     end
@@ -302,7 +302,7 @@ graph LR
 
 **Key Components:**
 1. **crawler_service.py** - Website crawling with Playwright, per-domain limits, link and page content extraction
-2. **extraction_service.py** - LLM-based contact extraction from HTML and response handling
+2. **extraction_service.py** - Regex/HTML-based contact extraction from content first; selective LLM-based extraction for obfuscated pages when enabled; LLM response handling
 3. **export_service.py** - DB export: flat CSV, per-domain CSV, Excel, and `get_export_summary`
 4. **keyword_service.py** - Keywords in DB: add, pending selection, `is_processed`, summaries
 5. **serp_getter.py** - SERP client for search results (as labeled on the diagram)
@@ -485,7 +485,7 @@ graph TB
 | **Backend API** | FastAPI | Monitoring and health check API |
 | **Database** | MySQL (`mysql:8.0` in `doc/docker-compose.yml`) | Primary data storage |
 | **Browser Automation** | Playwright | Website crawling |
-| **AI/ML** | YandexGPT, GigaChat | Contact extraction from HTML |
+| **AI/ML** | YandexGPT, GigaChat | Contact extraction: regex/HTML first, LLM fallback when needed |
 | **Task Queue** | Custom DB-based | Async task processing |
 | **Web Server** | Nginx | Reverse proxy |
 | **Process Manager** | Supervisor (`apt install supervisor` on deploy) | Process supervision |

@@ -125,7 +125,7 @@
             </div>
             <div style="display: inline-block; margin: 10px;">
                 <div class="external-box" style="min-width: 150px;">
-                    <h4>MySQL DB</h4>
+                    <h4>MySQL</h4>
                     <p>Data storage</p>
                 </div>
             </div>
@@ -173,7 +173,7 @@
                 </tr>
                 <tr>
                     <td><strong>MySQL Database</strong></td>
-                    <td>MySQL 8.x (Remote)</td>
+                    <td>MySQL (remote host; Docker examples use <code>mysql:8.0</code>)</td>
                     <td>Persistent storage for all data</td>
                 </tr>
             </tbody>
@@ -188,8 +188,8 @@
         <div class="component-box">
             <h3>📥 Input Layer</h3>
             <ul>
-                <li><code>Keyword Loader</code> - Loads keywords from database</li>
-                <li><code>State Manager</code> - Tracks pipeline progress</li>
+                <li><code>Keyword Loader</code> - Pending keywords from DB (<code>KeywordService.get_pending_keywords</code>, <code>is_processed == false</code>)</li>
+                <li><code>State Manager</code> - <code>utils/state_manager.py</code> writes <code>pipeline_state</code> rows in MySQL</li>
             </ul>
         </div>
         
@@ -209,9 +209,8 @@
         <div class="component-box">
             <h3>🕷️ Crawl Layer</h3>
             <ul>
-                <li><code>Domain Crawler</code> - Crawls websites with Playwright</li>
-                <li><code>Content Extractor</code> - Extracts HTML content</li>
-                <li><code>Rate Limiter</code> - Prevents overwhelming servers</li>
+                <li><code>Domain Crawler</code> - Playwright; <code>DomainRateLimiter</code> (per-domain semaphore, <code>MAX_CONCURRENT_DOMAINS_PER_SITE</code>); delay <code>DELAY_BETWEEN_REQUESTS</code> after each page; regex for sitemap <code>&lt;loc&gt;</code> URLs and quick contact hints in page text</li>
+                <li><code>Content Extractor</code> - Extracts HTML content for LLM</li>
             </ul>
         </div>
         
@@ -232,8 +231,8 @@
             <h3>💾 Storage Layer</h3>
             <ul>
                 <li><code>Result Saver</code> - Saves to database</li>
-                <li><code>Export Service</code> - Exports to CSV/Excel</li>
-                <li><code>Task Queue Writer</code> - Creates async tasks</li>
+                <li><code>Export Service</code> - <code>export_to_flat_csv</code>, <code>export_to_csv</code>, <code>export_to_excel</code>, <code>get_export_summary</code> (<code>services/export_service.py</code>)</li>
+                <li><code>Task Queue Writer</code> - Inserts <code>task_queue</code> rows; workers update queue and persist <code>crawl_logs</code> / results tables</li>
             </ul>
         </div>
     </div>
@@ -335,7 +334,7 @@
                 <p>kalmyk3j.beget.tech</p>
                 <ul>
                     <li>Primary database</li>
-                    <li>All application data</li>
+                    <li>All application data (incl. <code>task_queue</code>, <code>crawl_logs</code>)</li>
                 </ul>
             </div>
         </div>
@@ -360,7 +359,7 @@
                 <tr>
                     <td><strong>Database</strong></td>
                     <td>MySQL</td>
-                    <td>8.x</td>
+                    <td><code>mysql:8.0</code> in Docker; prod version not pinned in repo</td>
                 </tr>
                 <tr>
                     <td><strong>Browser Automation</strong></td>
@@ -380,7 +379,7 @@
                 <tr>
                     <td><strong>Process Manager</strong></td>
                     <td>Supervisor</td>
-                    <td>4.x</td>
+                    <td><code>apt install supervisor</code> (version from distro)</td>
                 </tr>
                 <tr>
                     <td><strong>CI/CD</strong></td>

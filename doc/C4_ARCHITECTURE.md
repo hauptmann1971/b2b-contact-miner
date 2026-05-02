@@ -300,31 +300,21 @@ graph LR
     style ExportService fill:#1168bd,color:#fff
 ```
 
-**Легенда (Level 4)**
+**Key Components:**
+1. **crawler_service.py** - Website crawling with Playwright, per-domain limits, link and page content extraction
+2. **extraction_service.py** - LLM-based contact extraction from HTML and response handling
+3. **export_service.py** - DB export: flat CSV, per-domain CSV, Excel, and `get_export_summary`
+4. **keyword_service.py** - Keywords in DB: add, pending selection, `is_processed`, summaries
+5. **serp_getter.py** - SERP client for search results (as labeled on the diagram)
+6. **yandex_getter.py** - Yandex-oriented getter (as labeled on the diagram)
+7. **google_getter.py** - Google-oriented getter (as labeled on the diagram)
+8. **keyword_checker.py** - Keyword validation rules (as labeled on the diagram)
+9. **contact_checker.py** - Contact validation rules (as labeled on the diagram)
+10. **state_manager.py** - Pipeline run progress in `pipeline_state` (`StateManager`)
+11. **logger.py** - Logging setup used by services (as labeled on the diagram)
+12. **helpers.py** - Shared helper utilities (as labeled on the diagram)
 
-- **Подграф `services/`** — основные сервисы приложения (прямоугольники с именами `*_service.py`).
-- **Подграф `getters/`** — модули доступа к внешним источникам выдачи и данных.
-- **Подграф `checkers/`** — модули проверок входных данных и результатов.
-- **Подграф `utils/`** — вспомогательные утилиты (состояние, логи, общие хелперы).
-
-| Обозначение на схеме | Кратко |
-|----------------------|--------|
-| **Стрелка** `A --> B` | Направление зависимости: в этой схеме A опирается на B (вызов, использование). |
-| **Синяя заливка** | Узлы основного слоя `services/`, выделенные на диаграмме. |
-| **crawler_service.py** | Краулинг сайтов (Playwright), лимиты по домену, извлечение ссылок и контента страниц. |
-| **extraction_service.py** | Извлечение контактов из HTML через LLM и постобработка результата. |
-| **export_service.py** | Экспорт контактов из БД: плоский CSV, CSV по доменам, Excel, сводная статистика. |
-| **keyword_service.py** | Работа с ключевыми словами в БД: добавление, выборка pending, отметка `is_processed`, сводки. |
-| **serp_getter.py** | Клиент получения выдачи поиска (SERP) для пайплайна (как на схеме). |
-| **yandex_getter.py** | Доступ к выдаче / API Yandex в роли getter’а (как на схеме). |
-| **google_getter.py** | Доступ к выдаче / API Google в роли getter’а (как на схеме). |
-| **keyword_checker.py** | Проверки и правила валидации для ключевых слов (как на схеме). |
-| **contact_checker.py** | Проверки и правила валидации для контактов (как на схеме). |
-| **state_manager.py** | Сохранение прогресса и статуса прогона пайплайна в таблице `pipeline_state`. |
-| **logger.py** | Настройка и использование логирования в сервисах (как на схеме). |
-| **helpers.py** | Общие вспомогательные функции, переиспользуемые слоями (как на схеме). |
-
-*Примечание:* подписи файлов на диаграмме — целевая декомпозиция уровня кода; фактическое расположение модулей смотрите в каталогах `services/`, `getters/`, `checkers/`, `utils/` (часть имён на схеме может не совпадать с текущим деревом репозитория).
+*Note:* Arrows show dependency direction (A → B means A uses B). Blue node fill marks emphasized `services/` modules. Diagram file names are the intended code-level split; compare with `services/`, `getters/`, `checkers/`, and `utils/` in the repo—some labels may not match the current tree.
 
 ---
 

@@ -37,11 +37,11 @@ graph TB
         Nginx[Nginx Reverse Proxy<br/>Port 80] -->|Proxies to| FlaskApp[Flask Web Server<br/>web_server.py<br/>Port 5000]
         Nginx -->|Health checks| FastAPI[FastAPI Monitoring<br/>api_server.py<br/>Port 8000]
         
-        FlaskApp -->|Reads/Writes| MySQL[(MySQL Database<br/>Remote)]
-        FastAPI -->|Reads| MySQL
-        MainPipeline[Main Pipeline<br/>main.py] -->|Reads/Writes| MySQL
+        FlaskApp <-->|Reads/Writes| MySQL[(MySQL<br/>Remote)]
+        FastAPI <-->|Reads| MySQL
+        MainPipeline[Main Pipeline<br/>main.py] <-->|Reads/Writes| MySQL
         MainPipeline -->|Task Queue| TaskQueue[Task Queue Worker<br/>workers/db_task_queue.py]
-        TaskQueue -->|Reads/Writes| MySQL
+        TaskQueue <-->|Reads/Writes| MySQL
         
         Supervisor[Supervisor<br/>Process Manager] -->|Manages| FlaskApp
         Supervisor -->|Manages| FastAPI
@@ -76,7 +76,7 @@ graph TB
 3. **FastAPI Monitoring** - Health check and metrics API
 4. **Main Pipeline** - Core contact mining orchestrator
 5. **Task Queue Worker** - Async task processing
-6. **MySQL Database** - Persistent data storage
+6. **MySQL** - Persistent data storage (Docker examples use image `mysql:8.0` in `doc/docker-compose.yml`; production host version is not pinned in this repo)
 7. **Database-backed Task Queue** - Persistent async processing in MySQL
 
 ---
@@ -86,13 +86,13 @@ graph TB
 ```mermaid
 graph TB
     subgraph "main.py - Pipeline Orchestrator"
-        KeywordLoader[Keyword Loader<br/>loads from DB] --> StateManager[State Manager<br/>tracks progress]
+        KeywordLoader[Keyword Loader<br/>pending keywords from DB] --> StateManager[State Manager<br/>utils/state_manager.py → pipeline_state]
         StateManager --> SearchOrchestrator[Search Orchestrator]
         
         SearchOrchestrator --> SERPGetter[SERP Getter<br/>getters/serp_getter.py]
         SERPGetter --> SearchResultProcessor[Search Result Processor<br/>services/crawler_service.py]
         
-        SearchResultProcessor --> DomainCrawler[Domain Crawler<br/>services/crawler_service.py]
+        SearchResultProcessor --> DomainCrawler[Domain Crawler<br/>Playwright; DomainRateLimiter per domain;<br/>delay between pages; regex e.g. sitemap loc, quick contact hints]
         DomainCrawler --> ContentExtractor[Content Extractor<br/>services/extraction_service.py]
         
         ContentExtractor --> LLMCaller[LLM Caller<br/>calls YandexGPT/GigaChat]
@@ -103,6 +103,12 @@ graph TB
         
         DBWriter --> TaskQueueWriter[Task Queue Writer<br/>workers/db_task_queue.py]
     end
+    
+    MySQL[(MySQL)]
+    KeywordLoader <-->|KeywordService.get_pending_keywords| MySQL
+    StateManager <-->|PipelineState rows| MySQL
+    DBWriter <-->|domain_contacts, contacts, crawl_logs, …| MySQL
+    TaskQueueWriter <-->|task_queue rows| MySQL
     
     subgraph "Supporting Components"
         Config[Configuration<br/>config/settings.py]
@@ -130,13 +136,14 @@ graph TB
 ```
 
 **Key Components:**
-1. **Keyword Loader** - Loads unprocessed keywords from database
-2. **Search Orchestrator** - Coordinates search → crawl → extract pipeline
-3. **SERP Getter** - Fetches search results from SERP API
-4. **Domain Crawler** - Crawls websites using Playwright
-5. **Content Extractor** - Uses LLM to extract contacts from HTML
-6. **Result Saver** - Saves extracted contacts to database
-7. **Task Queue Writer** - Creates async tasks for processing
+1. **Keyword Loader** - Loads pending keywords (`is_processed == false`) via `KeywordService.get_pending_keywords`
+2. **State Manager** - Persists run/progress to `pipeline_state` in MySQL (`StateManager`)
+3. **Search Orchestrator** - Coordinates search → crawl → extract pipeline
+4. **SERP Getter** - Fetches search results from SERP API
+5. **Domain Crawler** - Playwright crawl with per-domain semaphore (`DomainRateLimiter`, `MAX_CONCURRENT_DOMAINS_PER_SITE`), `DELAY_BETWEEN_REQUESTS` between pages, and regex helpers (e.g. sitemap `<loc>`, quick contact hints in text)
+6. **Content Extractor** - Uses LLM to extract contacts from HTML
+7. **Result Saver** - Saves extracted contacts to database
+8. **Task Queue Writer** - Inserts rows into `task_queue` for async workers (workers also read/update `task_queue` and persist crawl/results tables)
 
 ---
 
@@ -161,7 +168,7 @@ graph TB
         ExportService --> DBQuery
         HealthCheck --> DBQuery
         
-        DBQuery --> MySQL[(MySQL Database)]
+        DBQuery <-->|SQL| MySQL[(MySQL)]
     end
     
     subgraph "Templates"
@@ -200,7 +207,7 @@ graph TB
     subgraph "workers/db_task_queue.py - Task Queue"
         TaskProducer[Task Producer<br/>adds tasks to queue] --> TaskTable[(task_queue table)]
         
-        TaskConsumer[Task Consumer<br/>worker loop] -->|Locks & Processes| TaskTable
+        TaskConsumer[Task Consumer<br/>worker loop] <-->|locks rows, runs handlers| TaskTable
         TaskConsumer --> RetryHandler[Retry Handler<br/>handles failures]
         
         RetryHandler -->|Re-queues| TaskTable
@@ -208,8 +215,12 @@ graph TB
         
         TaskScheduler[Task Scheduler<br/>scripts/scheduler.py] -->|Scheduled tasks| TaskTable
         
-        MonitorWorker[Monitor Worker<br/>scripts/monitor_workers.py] -->|Reads status| TaskTable
+        MonitorWorker[Monitor Worker<br/>scripts/monitor_workers.py] <-->|Reads status| TaskTable
     end
+    
+    MySQL_TQ[(MySQL)]
+    TaskTable <-->|read/write| MySQL_TQ
+    TaskConsumer <-->|handlers persist search_results, domain_contacts, contacts, crawl_logs, keywords| MySQL_TQ
     
     subgraph "Task Types"
         SearchTask[search_keyword<br/>Fetch SERP results]
@@ -234,8 +245,8 @@ graph TB
 ```
 
 **Key Components:**
-1. **Task Producer** - Creates tasks when pipeline runs
-2. **Task Consumer** - Worker that processes tasks from queue
+1. **Task Producer** - Creates tasks when pipeline runs (`add_task` inserts into `task_queue`)
+2. **Task Consumer** - Worker loop locks rows, runs `search_keyword` / `crawl_domain` / `extract_contacts` / `save_results` handlers, updates `task_queue` and related tables via SQLAlchemy sessions
 3. **Retry Handler** - Implements retry logic with exponential backoff
 4. **Task Scheduler** - Schedules recurring tasks
 5. **Monitor Worker** - Monitors queue health and stuck tasks
@@ -249,7 +260,7 @@ graph LR
     subgraph "services/ - Business Logic"
         CrawlerService[crawler_service.py<br/>Website crawling]
         ExtractionService[extraction_service.py<br/>LLM contact extraction]
-        ExportService[export_service.py<br/>Data export]
+        ExportService[export_service.py<br/>export_to_flat_csv, export_to_csv,<br/>export_to_excel, get_export_summary]
         KeywordService[keyword_service.py<br/>Keyword management]
     end
     
@@ -360,6 +371,20 @@ erDiagram
         int max_retries
         int depends_on_task_id FK
     }
+    
+    CRAWL_LOGS {
+        int id PK
+        string domain
+        string url
+        int status_code
+        text error_message
+        int pages_crawled
+        int duration_seconds
+        text llm_request
+        text llm_response
+        string llm_model
+        datetime crawled_at
+    }
 ```
 
 ---
@@ -389,9 +414,9 @@ graph TB
         Supervisor[Supervisor] -->|Manages| FlaskApp
         Supervisor -->|Manages| FastAPI
         
-        FlaskApp --> RemoteDB[(Remote MySQL<br/>kalmyk3j.beget.tech)]
-        FastAPI --> RemoteDB
-        Pipeline --> RemoteDB
+        FlaskApp <-->|Reads/Writes| RemoteDB[(Remote MySQL<br/>kalmyk3j.beget.tech)]
+        FastAPI <-->|Reads| RemoteDB
+        Pipeline <-->|Reads/Writes| RemoteDB
         
     end
     
@@ -409,7 +434,7 @@ graph TB
 ## Key Design Decisions
 
 ### 1. Database Choice
-- **MySQL** for persistent storage (relational data, ACID compliance)
+- **MySQL** for persistent storage (relational data, ACID compliance); local Docker example uses image `mysql:8.0` (`doc/docker-compose.yml`)
 
 ### 2. Task Queue
 - **Database-backed queue** instead of external message brokers
@@ -442,12 +467,12 @@ graph TB
 | **Frontend** | HTML/CSS/JS + Jinja2 | Web UI templates |
 | **Backend Web** | Flask 3.x | Web application framework |
 | **Backend API** | FastAPI | Monitoring and health check API |
-| **Database** | MySQL 8.x | Primary data storage |
+| **Database** | MySQL (`mysql:8.0` in `doc/docker-compose.yml`) | Primary data storage |
 | **Browser Automation** | Playwright | Website crawling |
 | **AI/ML** | YandexGPT, GigaChat | Contact extraction from HTML |
 | **Task Queue** | Custom DB-based | Async task processing |
 | **Web Server** | Nginx | Reverse proxy |
-| **Process Manager** | Supervisor | Process supervision |
+| **Process Manager** | Supervisor (`apt install supervisor` on deploy) | Process supervision |
 | **CI/CD** | GitHub Actions | Automated testing and analysis |
 | **Code Quality** | SonarCloud | Static code analysis |
 | **Deployment** | SSH + Git | Manual deployment |

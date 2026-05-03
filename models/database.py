@@ -34,6 +34,10 @@ class ContactType(enum.Enum):
     YOUTUBE = "youtube"
 
 
+def _contact_type_values(enum_cls):
+    return [member.value for member in enum_cls]
+
+
 class Keyword(Base):
     """Search keywords to process (e.g., 'IT companies Moscow')"""
     __tablename__ = "keywords"
@@ -103,7 +107,11 @@ class Contact(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
     domain_contact_id = Column(Integer, ForeignKey("domain_contacts.id"), nullable=False, comment="Foreign key to domain_contacts table")
-    contact_type = Column(Enum(ContactType), nullable=False, comment="Type: email, telegram, linkedin, phone, x, facebook, instagram, youtube")
+    contact_type = Column(
+        Enum(ContactType, values_callable=_contact_type_values, validate_strings=True),
+        nullable=False,
+        comment="Type: email, telegram, linkedin, phone, x, facebook, instagram, youtube",
+    )
     value = Column(String(500), nullable=False, index=True, comment="Contact value (email address, phone number, etc.)")
     is_verified = Column(Boolean, default=False, comment="True if contact has been verified")
     verification_date = Column(DateTime, nullable=True, comment="Date of last verification")

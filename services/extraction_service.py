@@ -1,5 +1,6 @@
 import re
-from typing import List, Dict, Optional
+from dataclasses import dataclass
+from typing import Dict, Iterator, List, Optional
 from email_validator import validate_email, EmailNotValidError
 from config.settings import settings
 from loguru import logger
@@ -7,6 +8,19 @@ from models.schemas import ContactInfo
 
 # LLM Model constants
 OPENAI_MODEL = "gpt-3.5-turbo"
+
+
+@dataclass(frozen=True)
+class ContactExtractionResult:
+    contacts: ContactInfo
+    llm_data: Optional[dict] = None
+
+    def __iter__(self) -> Iterator:
+        yield self.contacts
+        yield self.llm_data
+
+    def __getattr__(self, name: str):
+        return getattr(self.contacts, name)
 
 
 class ExtractionService:
@@ -37,7 +51,7 @@ class ExtractionService:
             r'{@}', r' {@} ',
         ]
     
-    def extract_contacts(self, content_list: List[Dict]) -> tuple:
+    def extract_contacts(self, content_list: List[Dict]) -> ContactExtractionResult:
         """Extract contacts with smart LLM fallback
         Returns: (ContactInfo, llm_data) where llm_data is dict with request/response/model or None
         """
@@ -148,13 +162,14 @@ class ExtractionService:
         
         logger.info(f"Extracted: {len(filtered_emails)} emails, {len(telegram_links)} Telegram, {len(linkedin_links)} LinkedIn")
         
-        return ContactInfo(
+        contacts = ContactInfo(
             emails=filtered_emails,
             telegram_links=sorted(list(telegram_links)),
             linkedin_links=sorted(list(linkedin_links)),
             phone_numbers=sorted(list(phone_numbers)),
             social_links={k: sorted(list(v)) for k, v in social_links.items() if v}
-        ), llm_data
+        )
+        return ContactExtractionResult(contacts, llm_data)
     
     def _extract_with_llm_selective(self, obfuscated_contents: List[str]) -> tuple:
         """Use LLM only for pages with obfuscated emails

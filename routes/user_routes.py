@@ -28,6 +28,13 @@ def _normalize_country(value: str, fallback: str = "RU") -> str:
     return fallback
 
 
+def _normalize_page_arg(default: int = 1) -> int:
+    page = request.args.get("page", default, type=int)
+    if page is None or page < 1:
+        return default
+    return page
+
+
 def _resolve_locale_from_form():
     selected_language = request.form.get("language", "ru")
     selected_country = request.form.get("country", "RU")
@@ -179,7 +186,7 @@ def register_user_routes(app):
     def keywords_list():
         db = _db_session()
         try:
-            page = request.args.get("page", 1, type=int)
+            page = _normalize_page_arg()
             per_page = 20
             keywords_query = db.query(Keyword).order_by(desc(Keyword.created_at))
             total = keywords_query.count()
@@ -211,7 +218,7 @@ def register_user_routes(app):
     def contacts_list():
         db = _db_session()
         try:
-            page = request.args.get("page", 1, type=int)
+            page = _normalize_page_arg()
             per_page = 50
             contact_type = request.args.get("type", "")
             query = request.args.get("q", "").strip()

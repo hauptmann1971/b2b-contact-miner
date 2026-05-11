@@ -124,16 +124,22 @@ class SerpService:
     
     def save_results(self, db: Session, keyword_id: int, results: List[Dict], raw_query: str = None, raw_response: dict = None):
         """Save search results to database"""
+        saved_count = 0
         for result in results:
+            url = (result.get("url") or "").strip()
+            if not url:
+                logger.warning(f"Skipping search result without URL for keyword {keyword_id}")
+                continue
+
             existing = db.query(SearchResult).filter(
                 SearchResult.keyword_id == keyword_id,
-                SearchResult.url == result["url"]
+                SearchResult.url == url
             ).first()
             
             if not existing:
                 search_result = SearchResult(
                     keyword_id=keyword_id,
-                    url=result["url"],
+                    url=url,
                     title=result.get("title"),
                     snippet=result.get("snippet"),
                     position=result.get("position"),
@@ -141,6 +147,7 @@ class SerpService:
                     raw_search_response=raw_response  # Save raw response from SERP provider
                 )
                 db.add(search_result)
+                saved_count += 1
         
         db.commit()
-        logger.info(f"Saved {len(results)} search results for keyword {keyword_id}")
+        logger.info(f"Saved {saved_count} search results for keyword {keyword_id}")

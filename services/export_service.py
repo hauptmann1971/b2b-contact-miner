@@ -10,6 +10,27 @@ from loguru import logger
 class ExportService:
     def __init__(self, db: Session):
         self.db = db
+
+    @staticmethod
+    def _format_created_at(value) -> str:
+        if not value:
+            return ""
+        if hasattr(value, "strftime"):
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        return str(value)
+
+    @staticmethod
+    def _normalize_tag_list(tags) -> List[str]:
+        if not isinstance(tags, list):
+            return []
+        return [tag.strip() for tag in tags if isinstance(tag, str) and tag.strip()]
+
+    def _format_tags(self, tags, separator: str = "; ") -> str:
+        if isinstance(tags, list):
+            return separator.join(self._normalize_tag_list(tags))
+        if tags is None:
+            return ""
+        return tags if isinstance(tags, str) else str(tags)
     
     def export_to_flat_csv(self, filters: dict = None) -> str:
         """Export contacts to flat CSV format with keyword info"""
@@ -136,7 +157,7 @@ class ExportService:
         
         # Filter out generic tags and keep only meaningful categories
         generic_tags = {'b2b', 'company', 'business', 'website'}
-        meaningful_tags = [tag for tag in tags if tag.lower() not in generic_tags]
+        meaningful_tags = [tag for tag in self._normalize_tag_list(tags) if tag.lower() not in generic_tags]
         
         return ', '.join(meaningful_tags[:3])  # Top 3 tags
     
@@ -192,8 +213,8 @@ class ExportService:
                 "; ".join(data["phones"]),
                 data["confidence"],
                 data["method"],
-                "; ".join(data["tags"]) if isinstance(data["tags"], list) else data["tags"],
-                data["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+                self._format_tags(data["tags"]),
+                self._format_created_at(data["created_at"])
             ])
         
         logger.info(f"Exported {len(domain_contacts)} domains to CSV")
@@ -259,8 +280,8 @@ class ExportService:
                     "\n".join(data["phones"]),
                     data["confidence"],
                     data["method"],
-                    ", ".join(data["tags"]) if isinstance(data["tags"], list) else data["tags"],
-                    data["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+                    self._format_tags(data["tags"], separator=", "),
+                    self._format_created_at(data["created_at"])
                 ])
             
             for column in ws.columns:

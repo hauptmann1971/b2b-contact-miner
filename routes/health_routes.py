@@ -14,12 +14,15 @@ def register_health_routes(app):
     @app.route("/health")
     def health_check():
         db_status = "healthy"
+        db = None
         try:
             db = SessionLocal()
             db.execute(text("SELECT 1"))
-            db.close()
         except Exception as e:
             db_status = f"unhealthy: {e}"
+        finally:
+            if db is not None:
+                db.close()
 
         status_code = 200 if db_status == "healthy" else 503
         return {
@@ -36,10 +39,13 @@ def register_health_routes(app):
 
     @app.route("/health/ready")
     def readiness_check():
+        db = None
         try:
             db = SessionLocal()
             db.execute(text("SELECT 1"))
-            db.close()
             return {"status": "ready", "timestamp": datetime.now(timezone.utc).isoformat()}, 200
         except Exception as e:
             return {"status": "not_ready", "timestamp": datetime.now(timezone.utc).isoformat(), "error": str(e)}, 503
+        finally:
+            if db is not None:
+                db.close()

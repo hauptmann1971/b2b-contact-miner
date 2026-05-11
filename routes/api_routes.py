@@ -11,6 +11,10 @@ from utils.web_security import admin_auth_required
 from utils.web_stats import get_contact_type_counts
 
 
+def _datetime_isoformat(value):
+    return value.isoformat() if value else None
+
+
 def register_api_routes(app, logger):
     @app.route("/api/llm-data")
     @admin_auth_required
@@ -126,8 +130,8 @@ def register_api_routes(app, logger):
                         "language": k.language,
                         "country": k.country,
                         "is_processed": k.is_processed,
-                        "last_crawled_at": k.last_crawled_at.isoformat() if k.last_crawled_at else None,
-                        "created_at": k.created_at.isoformat(),
+                        "last_crawled_at": _datetime_isoformat(k.last_crawled_at),
+                        "created_at": _datetime_isoformat(k.created_at),
                     }
                     for k in keywords
                 ]

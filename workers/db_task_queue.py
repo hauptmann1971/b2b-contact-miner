@@ -31,8 +31,10 @@ class DatabaseTaskQueue:
         self._extraction_service = None
     
     @staticmethod
-    def _safe_close_db(db: Session):
+    def _safe_close_db(db: Optional[Session]):
         """Safely close database session without raising errors"""
+        if db is None:
+            return
         try:
             db.close()
         except Exception as e:
@@ -121,6 +123,7 @@ class DatabaseTaskQueue:
             }
             max_retries = retry_map.get(task_type, 3)
         
+        db = None
         try:
             db = SessionLocal()
             task = TaskQueue(
@@ -140,7 +143,8 @@ class DatabaseTaskQueue:
             logger.debug(f"Task added to DB queue: {task.id} ({task_type}) [priority={priority}, keyword={keyword_id}]")
             return task.id
         except Exception as e:
-            db.rollback()
+            if db is not None:
+                db.rollback()
             logger.error(f"Failed to add task to DB: {e}")
             raise
         finally:
@@ -286,17 +290,30 @@ class DatabaseTaskQueue:
         if not search_results:
             logger.warning(f"No search results for keyword {keyword_id}")
             return
+
+        valid_search_results = []
+        for result in search_results:
+            url = (result.get('url') or '').strip()
+            if not url:
+                logger.warning(f"Skipping search result without URL for keyword {keyword_id}")
+                continue
+            valid_search_results.append({**result, 'url': url})
+
+        if not valid_search_results:
+            logger.warning(f"No valid search result URLs for keyword {keyword_id}")
+            return
         
         # Save search results to DB
-        db = SessionLocal()
+        db = None
         try:
+            db = SessionLocal()
             raw_query = f"{keyword_text} site:{country}" if country else keyword_text
-            serp.save_results(db, keyword_id, search_results, raw_query, raw_response)
-            logger.info(f"✓ Saved {len(search_results)} search results for keyword {keyword_id}")
+            serp.save_results(db, keyword_id, valid_search_results, raw_query, raw_response)
+            logger.info(f"✓ Saved {len(valid_search_results)} search results for keyword {keyword_id}")
             
             # Create crawl tasks for each URL (+ optional domain-root fallback)
             queued_urls = set()
-            for idx, result in enumerate(search_results):
+            for idx, result in enumerate(valid_search_results):
                 url = result['url']
                 candidate_urls = [url]
                 if self._needs_domain_fallback(url):
@@ -343,7 +360,8 @@ class DatabaseTaskQueue:
             logger.info(f"✓ Created {len(queued_urls)} crawl tasks for keyword {keyword_id}")
             
         except Exception as e:
-            db.rollback()
+            if db is not None:
+                db.rollback()
             logger.error(f"Failed to save search results: {e}")
             raise
         finally:
@@ -369,8 +387,9 @@ class DatabaseTaskQueue:
             return
         
         # Save crawl log
-        db = SessionLocal()
+        db = None
         try:
+            db = SessionLocal()
             from models.database import CrawlLog
             import time
             
@@ -394,9 +413,13 @@ class DatabaseTaskQueue:
             contact_page_urls = []
             for item in crawl_data.get("content", []):
                 if item.get("type") == "contact_page":
+                    item_url = item.get('url')
+                    if not item_url:
+                        logger.warning(f"Skipping contact page without URL for {url}")
+                        continue
                     # Get relative path
                     from urllib.parse import urlparse
-                    parsed = urlparse(item['url'])
+                    parsed = urlparse(item_url)
                     contact_page_urls.append(parsed.path)
             
             # Create extract task
@@ -420,7 +443,8 @@ class DatabaseTaskQueue:
                 logger.warning(f"No contact pages found for {url}")
             
         except Exception as e:
-            db.rollback()
+            if db is not None:
+                db.rollback()
             logger.error(f"Failed to save crawl data: {e}")
             raise
         finally:
@@ -469,8 +493,9 @@ class DatabaseTaskQueue:
             logger.info(f"✓ Email verification: {sum(verified_emails.values())}/{len(verified_emails)} valid")
         
         # Save to database
-        db = SessionLocal()
+        db = None
         try:
+            db = SessionLocal()
             # Determine tags (hybrid approach: keyword + LLM classification)
             tags = []
             try:
@@ -594,7 +619,8 @@ class DatabaseTaskQueue:
                        f"{len(contacts.linkedin_links)} LinkedIn, {total_social} social")
             
         except Exception as e:
-            db.rollback()
+            if db is not None:
+                db.rollback()
             logger.error(f"Failed to save contacts for {domain}: {e}")
             raise
         finally:
@@ -602,6 +628,7 @@ class DatabaseTaskQueue:
     
     async def _handle_task_completion(self, task_id: int, result: Dict):
         """Mark task as completed"""
+        db = None
         try:
             db = SessionLocal()
             task = db.query(TaskQueue).filter(TaskQueue.id == task_id).first()
@@ -619,6 +646,7 @@ class DatabaseTaskQueue:
     
     async def _handle_task_failure(self, task_id: int, error_message: str):
         """Handle task failure with retry logic"""
+        db = None
         try:
             db = SessionLocal()
             task = db.query(TaskQueue).filter(TaskQueue.id == task_id).first()
@@ -648,6 +676,7 @@ class DatabaseTaskQueue:
     
     async def get_queue_stats(self) -> Dict:
         """Get queue statistics with keyword breakdown"""
+        db = None
         try:
             db = SessionLocal()
             now = datetime.now(timezone.utc)
@@ -740,6 +769,7 @@ class DatabaseTaskQueue:
     
     async def clear_completed_tasks(self, older_than_days: int = 7):
         """Clear old completed/failed tasks"""
+        db = None
         try:
             db = SessionLocal()
             cutoff_date = datetime.now(timezone.utc) - timedelta(days=older_than_days)
@@ -760,6 +790,7 @@ class DatabaseTaskQueue:
     
     async def recover_stale_tasks(self):
         """Recover tasks that are stuck in 'running' state (worker crashed)"""
+        db = None
         try:
             db = SessionLocal()
             timeout_threshold = datetime.now(timezone.utc) - timedelta(seconds=self.lock_timeout)
@@ -773,10 +804,11 @@ class DatabaseTaskQueue:
                 logger.warning(f"Found {len(stale_tasks)} stale running tasks, recovering...")
                 
                 for task in stale_tasks:
+                    locked_at = task.locked_at
                     task.status = 'pending'
                     task.locked_by = None
                     task.locked_at = None
-                    task.error_message = f"Task recovered from stale state (locked at {task.locked_at})"
+                    task.error_message = f"Task recovered from stale state (locked at {locked_at})"
                 
                 db.commit()
                 logger.info(f"✓ Recovered {len(stale_tasks)} stale tasks")

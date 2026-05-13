@@ -33,10 +33,24 @@ class DatabaseTaskQueue:
     @staticmethod
     def _safe_close_db(db: Session):
         """Safely close database session without raising errors"""
+        if db is None:
+            return
+
         try:
             db.close()
         except Exception as e:
             logger.debug(f"Non-critical error closing DB session: {e}")
+
+    @staticmethod
+    def _safe_rollback_db(db: Session):
+        """Safely rollback database session without masking the original error"""
+        if db is None:
+            return
+
+        try:
+            db.rollback()
+        except Exception as e:
+            logger.debug(f"Non-critical error rolling back DB session: {e}")
     
     def _get_serp_service(self):
         """Lazy load SerpService"""
@@ -121,6 +135,7 @@ class DatabaseTaskQueue:
             }
             max_retries = retry_map.get(task_type, 3)
         
+        db = None
         try:
             db = SessionLocal()
             task = TaskQueue(
@@ -140,7 +155,7 @@ class DatabaseTaskQueue:
             logger.debug(f"Task added to DB queue: {task.id} ({task_type}) [priority={priority}, keyword={keyword_id}]")
             return task.id
         except Exception as e:
-            db.rollback()
+            self._safe_rollback_db(db)
             logger.error(f"Failed to add task to DB: {e}")
             raise
         finally:

@@ -6,7 +6,9 @@ Run after upgrading workers that now auto-finalize keywords; fixes rows stuck fr
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
 
 from datetime import datetime, timezone  # noqa: E402
 

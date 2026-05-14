@@ -8,32 +8,11 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
-function saveToken() {
-    const tokenInput = document.getElementById('apiTokenInput');
-    const value = (tokenInput.value || '').trim();
-    if (value) {
-        localStorage.setItem('llmDataApiToken', value);
-        alert('Токен сохранен локально в браузере.');
-    } else {
-        localStorage.removeItem('llmDataApiToken');
-        alert('Токен очищен.');
-    }
-}
-
-function loadSavedToken() {
-    const tokenInput = document.getElementById('apiTokenInput');
-    const saved = localStorage.getItem('llmDataApiToken') || '';
-    tokenInput.value = saved;
-}
-
 async function loadData() {
     try {
-        const token = (document.getElementById('apiTokenInput').value || '').trim();
-        const response = await fetch('/api/llm-data', {
-            headers: token ? { 'X-API-Key': token } : {}
-        });
+        const response = await fetch('/api/llm-data', { credentials: 'same-origin' });
         if (response.status === 401) {
-            throw new Error('Unauthorized (401). Укажите корректный LLM_DATA_API_TOKEN.');
+            throw new Error('Unauthorized (401). Требуется вход администратора или LLM_DATA_API_TOKEN.');
         }
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -120,5 +99,4 @@ function truncateText(text, maxLength) {
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
 }
 
-loadSavedToken();
 loadData();

@@ -7,7 +7,7 @@ from sqlalchemy import desc
 
 from models.database import Contact, CrawlLog, DomainContact, Keyword, SearchResult, SessionLocal
 from services.export_service import ExportService
-from utils.web_security import admin_auth_required
+from utils.web_security import admin_auth_enabled, admin_auth_required
 from utils.web_stats import get_contact_type_counts
 
 
@@ -15,10 +15,13 @@ def register_api_routes(app, logger):
     @app.route("/api/llm-data")
     @admin_auth_required
     def api_llm_data():
-        expected_token = os.getenv("LLM_DATA_API_TOKEN")
-        provided_token = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
-        if not expected_token or provided_token != expected_token:
-            return jsonify({"error": "Unauthorized"}), 401
+        # When admin HTTP Basic auth is enabled, that is sufficient for this endpoint (browser sends credentials on same-origin fetch).
+        # If admin auth is disabled, require LLM_DATA_API_TOKEN so the API is not accidentally public.
+        if not admin_auth_enabled():
+            expected_token = os.getenv("LLM_DATA_API_TOKEN")
+            provided_token = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+            if not expected_token or provided_token != expected_token:
+                return jsonify({"error": "Unauthorized"}), 401
 
         def _sanitize(value):
             if isinstance(value, str):

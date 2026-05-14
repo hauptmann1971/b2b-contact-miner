@@ -51,34 +51,6 @@ h1 {
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
 }
 
-.token-box {
-    background: white;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-}
-
-.token-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 10px;
-    align-items: center;
-}
-
-.token-row input {
-    padding: 10px 12px;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    font-size: 14px;
-}
-
-.token-hint {
-    color: #666;
-    font-size: 0.9em;
-    margin-top: 8px;
-}
-
 .section {
     background: white;
     border-radius: 12px;

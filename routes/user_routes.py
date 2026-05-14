@@ -101,6 +101,13 @@ def _db_session():
 
 
 def register_user_routes(app):
+    @app.after_request
+    def _no_cache_user_dashboard(response):
+        if request.endpoint in ("index", "user_workspace") and response.mimetype and "html" in response.mimetype.lower():
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
     @app.route("/")
     def index():
         return user_workspace()

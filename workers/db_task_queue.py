@@ -236,7 +236,45 @@ class DatabaseTaskQueue:
             return None
         finally:
             self._safe_close_db(db)
-    
+
+    def _maybe_mark_keyword_processed(self, keyword_id: Optional[int]) -> None:
+        """Set Keyword.is_processed when no queue work remains for this keyword (async pipeline)."""
+        if not keyword_id:
+            return
+        db = SessionLocal()
+        try:
+            open_tasks = (
+                db.query(TaskQueue)
+                .filter(
+                    TaskQueue.keyword_id == keyword_id,
+                    TaskQueue.status.in_(("pending", "running")),
+                )
+                .count()
+            )
+            if open_tasks > 0:
+                return
+            keyword = db.query(Keyword).filter(Keyword.id == keyword_id).first()
+            if not keyword or keyword.is_processed:
+                return
+            ever_queued = (
+                db.query(TaskQueue)
+                .filter(TaskQueue.keyword_id == keyword_id)
+                .count()
+            )
+            if ever_queued == 0:
+                return
+            keyword.is_processed = True
+            keyword.last_crawled_at = datetime.now(timezone.utc)
+            db.commit()
+            logger.info(
+                f"Keyword {keyword_id} marked processed (queue idle for this keyword)"
+            )
+        except Exception as e:
+            logger.error(f"Failed to finalize keyword {keyword_id}: {e}")
+            db.rollback()
+        finally:
+            self._safe_close_db(db)
+
     async def _execute_task(self, task: TaskQueue, worker_name: str):
         """Execute a task based on its type"""
         try:
@@ -602,10 +640,12 @@ class DatabaseTaskQueue:
     
     async def _handle_task_completion(self, task_id: int, result: Dict):
         """Mark task as completed"""
+        keyword_id: Optional[int] = None
         try:
             db = SessionLocal()
             task = db.query(TaskQueue).filter(TaskQueue.id == task_id).first()
             if task:
+                keyword_id = task.keyword_id
                 task.status = 'completed'
                 task.result = json.dumps(result)
                 task.completed_at = datetime.now(timezone.utc)
@@ -616,13 +656,18 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to complete task {task_id}: {e}")
         finally:
             self._safe_close_db(db)
+        if keyword_id is not None:
+            self._maybe_mark_keyword_processed(keyword_id)
     
     async def _handle_task_failure(self, task_id: int, error_message: str):
         """Handle task failure with retry logic"""
+        keyword_id: Optional[int] = None
+        finalized = False
         try:
             db = SessionLocal()
             task = db.query(TaskQueue).filter(TaskQueue.id == task_id).first()
             if task:
+                keyword_id = task.keyword_id
                 task.retry_count += 1
                 task.error_message = error_message
                 
@@ -638,6 +683,7 @@ class DatabaseTaskQueue:
                     task.completed_at = datetime.now(timezone.utc)
                     task.locked_by = None
                     task.locked_at = None
+                    finalized = True
                     logger.error(f"Task {task_id} failed after {task.retry_count} retries")
                 
                 db.commit()
@@ -645,6 +691,8 @@ class DatabaseTaskQueue:
             logger.error(f"Failed to handle task failure {task_id}: {e}")
         finally:
             self._safe_close_db(db)
+        if finalized and keyword_id is not None:
+            self._maybe_mark_keyword_processed(keyword_id)
     
     async def get_queue_stats(self) -> Dict:
         """Get queue statistics with keyword breakdown"""

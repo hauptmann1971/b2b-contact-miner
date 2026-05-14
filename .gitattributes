@@ -1,0 +1,2 @@
+# Shell scripts must use LF so Linux/bash (set -o pipefail) works after deploy.
+*.sh text eol=lf

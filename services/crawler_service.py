@@ -83,7 +83,7 @@ class CrawlerService:
                 page = await context.new_page()
                 
                 try:
-                    sitemap_urls = await self._parse_sitemap(page, base_url)
+                    sitemap_urls = await self._parse_sitemap(page, base_url, start_time)
                     if sitemap_urls:
                         logger.info(f"Found {len(sitemap_urls)} URLs in sitemap for {domain}")
                     
@@ -192,12 +192,20 @@ class CrawlerService:
         
         return queue
     
-    async def _parse_sitemap(self, page: Page, base_url: str) -> Optional[List[str]]:
+    async def _parse_sitemap(
+        self, page: Page, base_url: str, domain_start_time: float
+    ) -> Optional[List[str]]:
         """Parse sitemap.xml to find contact pages quickly"""
         sitemap_url = urljoin(base_url, "/sitemap.xml")
         
         try:
-            response = await page.goto(sitemap_url, timeout=10000, wait_until="domcontentloaded")
+            sm_timeout = min(
+                10_000,
+                self._remaining_domain_timeout_ms(domain_start_time, reserve_ms=1500),
+            )
+            response = await page.goto(
+                sitemap_url, timeout=max(2000, sm_timeout), wait_until="domcontentloaded"
+            )
             if response.status != 200:
                 return None
             
@@ -214,6 +222,39 @@ class CrawlerService:
             logger.debug(f"No sitemap found for {base_url}: {e}")
             return None
     
+    async def _fetch_page_text_and_html(
+        self,
+        page: Page,
+        url: str,
+        primary_timeout: int,
+        fallback_timeout: int,
+    ) -> Dict[str, str]:
+        """Navigate and read DOM (used under asyncio.wait_for hard wall clock cap)."""
+        try:
+            await page.goto(url, timeout=primary_timeout, wait_until="networkidle")
+        except Exception:
+            # Some sites never reach "networkidle" due to trackers/streams; fallback to DOM ready.
+            await page.goto(
+                url,
+                timeout=fallback_timeout,
+                wait_until="domcontentloaded",
+            )
+        await asyncio.sleep(1)
+
+        # Prefer rendered body text, fallback to textContent for dynamic pages.
+        try:
+            text_content = await page.inner_text(
+                "body", timeout=min(5000, primary_timeout)
+            )
+        except Exception:
+            body_handle = await page.query_selector("body")
+            if body_handle:
+                text_content = (await body_handle.text_content()) or ""
+            else:
+                text_content = ""
+        html_content = await page.content()
+        return {"text": text_content, "html": html_content}
+
     async def _crawl_page_with_rotation(
         self,
         page: Page,
@@ -227,31 +268,23 @@ class CrawlerService:
             primary_timeout = min(self.timeout, timeout_budget_ms) if timeout_budget_ms else self.timeout
             fallback_timeout = min(settings.REQUEST_TIMEOUT_FALLBACK * 1000, timeout_budget_ms) if timeout_budget_ms else settings.REQUEST_TIMEOUT_FALLBACK * 1000
 
+            # Playwright navigation can exceed goto timeouts on pathological sites; cap wall clock.
+            wall_ms = timeout_budget_ms if timeout_budget_ms else (
+                primary_timeout + fallback_timeout + 8000
+            )
+            wall_sec = max(0.5, (wall_ms / 1000.0) - 0.25)
             try:
-                await page.goto(url, timeout=primary_timeout, wait_until="networkidle")
-            except Exception:
-                # Some sites never reach "networkidle" due to trackers/streams; fallback to DOM ready.
-                await page.goto(
-                    url,
-                    timeout=fallback_timeout,
-                    wait_until="domcontentloaded"
+                return await asyncio.wait_for(
+                    self._fetch_page_text_and_html(
+                        page, url, primary_timeout, fallback_timeout
+                    ),
+                    timeout=wall_sec,
                 )
-            await asyncio.sleep(1)
-
-            # Prefer rendered body text, fallback to textContent for dynamic pages.
-            try:
-                text_content = await page.inner_text("body", timeout=min(5000, primary_timeout))
-            except Exception:
-                body_handle = await page.query_selector("body")
-                if body_handle:
-                    text_content = (await body_handle.text_content()) or ""
-                else:
-                    text_content = ""
-            html_content = await page.content()
-            return {
-                "text": text_content,
-                "html": html_content
-            }
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Page crawl wall-clock timeout ({wall_sec:.1f}s) for {url}"
+                )
+                return None
         except Exception as e:
             logger.error(f"Error crawling {url}: {e}")
             return None

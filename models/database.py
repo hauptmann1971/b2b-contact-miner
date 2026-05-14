@@ -140,7 +140,8 @@ class PipelineState(Base):
     __tablename__ = "pipeline_state"
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
-    run_id = Column(String(100), nullable=False, index=True, unique=True, comment="Unique pipeline run identifier")
+    # Same run_id is shared across multiple rows (run header + per-keyword checkpoints); must not be UNIQUE.
+    run_id = Column(String(100), nullable=False, index=True, comment="Pipeline run identifier (shared across checkpoints)")
     keyword_id = Column(Integer, ForeignKey("keywords.id"), comment="Current keyword being processed")
     status = Column(String(50), default="pending", comment="Status: pending, running, completed, failed")
     progress_percent = Column(Integer, default=0, comment="Progress percentage 0-100")

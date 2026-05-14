@@ -141,7 +141,7 @@ Tracks the state and progress of pipeline runs.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | INT | Unique identifier |
-| `run_id` | VARCHAR(100) | Unique pipeline run identifier |
+| `run_id` | VARCHAR(100) | Pipeline run identifier (shared across checkpoint rows for the same run) |
 | `keyword_id` | INT | Current keyword being processed |
 | `status` | VARCHAR(50) | Status: pending, running, completed, failed |
 | `progress_percent` | INT | Progress percentage 0-100 |
@@ -154,8 +154,7 @@ Tracks the state and progress of pipeline runs.
 **Indexes:**
 - PRIMARY KEY (`id`)
 - FOREIGN KEY (`keyword_id`) → `keywords.id`
-- UNIQUE INDEX (`run_id`)
-- INDEX (`run_id`)
+- INDEX (`run_id`) — non-unique (multiple rows per run)
 
 **Status Values:**
 - `pending` - Not started yet

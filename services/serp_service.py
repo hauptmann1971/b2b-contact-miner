@@ -78,7 +78,10 @@ class SerpService:
     def _duckduckgo_search(self, query: str, country: str, language: str, num_results: int) -> List[Dict]:
         """Search using DuckDuckGo (free, no API key required)"""
         try:
-            from ddgs import DDGS
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
             
             # Map country codes to DuckDuckGo regions
             region_map = {

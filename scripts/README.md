@@ -33,6 +33,15 @@ python script_name.py
 - `monitor_workers.py` - Monitor worker processes and task queue
 
 ### Automation
+- `run_pipeline_background.sh` - Start `main.py` in the background with an **absolute** log path (default: `$PROJECT_DIR/logs/pipeline_background.log`). No `disown`; works from any directory.
+  ```bash
+  # From repo (Linux / server)
+  chmod +x scripts/run_pipeline_background.sh
+  PROJECT_DIR=/opt/b2b-contact-miner ./scripts/run_pipeline_background.sh
+
+  # Custom log file
+  PIPELINE_LOG=/var/log/b2b-pipeline.log PROJECT_DIR=/opt/b2b-contact-miner ./scripts/run_pipeline_background.sh
+  ```
 - `register_weekly_smoke_task.ps1` - Register a Windows Task Scheduler job for weekly smoke KPI checks
   ```powershell
   # Default: every Sunday at 03:00

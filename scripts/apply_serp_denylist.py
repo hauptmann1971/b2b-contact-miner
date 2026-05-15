@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -11,7 +12,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(ROOT)
 sys.path.insert(0, ROOT)
 
-from config.settings import settings  # noqa: E402
 from models.database import SessionLocal  # noqa: E402
 from utils.serp_denylist import suggest_blocked_hosts  # noqa: E402
 from utils.serp_filters import DEFAULT_BLOCKED_HOST_SUFFIXES  # noqa: E402
@@ -35,7 +35,7 @@ def _parse_env_hosts(env_text: str) -> list[str]:
 
 
 def _write_env_hosts(path: str, hosts: list[str]) -> None:
-    line = "SERP_BLOCKED_HOST_SUFFIXES=" + ",".join(hosts)
+    line = "SERP_BLOCKED_HOST_SUFFIXES=" + json.dumps(hosts, ensure_ascii=False)
     with open(path, encoding="utf-8") as f:
         content = f.read()
     if re.search(r"^SERP_BLOCKED_HOST_SUFFIXES=", content, re.MULTILINE):
@@ -74,10 +74,7 @@ def main() -> int:
         print("No new hosts to add.")
         return 0
 
-    current = list(
-        settings.SERP_BLOCKED_HOST_SUFFIXES
-        or DEFAULT_BLOCKED_HOST_SUFFIXES
-    )
+    current = list(DEFAULT_BLOCKED_HOST_SUFFIXES)
     if os.path.isfile(args.env_file):
         env_hosts = _parse_env_hosts(open(args.env_file, encoding="utf-8").read())
         for h in env_hosts:

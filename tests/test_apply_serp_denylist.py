@@ -12,5 +12,5 @@ def test_write_env_hosts_updates_line(tmp_path):
     env.write_text("FOO=1\nSERP_BLOCKED_HOST_SUFFIXES=old.com\n", encoding="utf-8")
     _write_env_hosts(str(env), ["a.com", "b.com"])
     text = env.read_text(encoding="utf-8")
-    assert "SERP_BLOCKED_HOST_SUFFIXES=a.com,b.com" in text
+    assert 'SERP_BLOCKED_HOST_SUFFIXES=["a.com", "b.com"]' in text
     assert "old.com" not in text

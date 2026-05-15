@@ -9,7 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(ROOT)
 sys.path.insert(0, ROOT)
 
-from utils.serp_filters import DEFAULT_BLOCKED_HOST_SUFFIXES  # noqa: E402
+from utils.serp_constants import DEFAULT_BLOCKED_HOST_SUFFIXES  # noqa: E402
 
 
 def main() -> int:

@@ -14,7 +14,7 @@ sys.path.insert(0, ROOT)
 
 from models.database import SessionLocal  # noqa: E402
 from utils.serp_denylist import suggest_blocked_hosts  # noqa: E402
-from utils.serp_filters import DEFAULT_BLOCKED_HOST_SUFFIXES  # noqa: E402
+from utils.serp_constants import DEFAULT_BLOCKED_HOST_SUFFIXES  # noqa: E402
 
 
 def _parse_env_hosts(env_text: str) -> list[str]:

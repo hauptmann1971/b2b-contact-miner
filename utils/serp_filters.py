@@ -4,49 +4,16 @@ from __future__ import annotations
 from typing import Dict, List, Set, Tuple
 from urllib.parse import urlparse
 
-from config.settings import settings
+from utils.serp_constants import DEFAULT_BLOCKED_HOST_SUFFIXES
 
-# Domains that rarely yield B2B contacts worth crawling.
-DEFAULT_BLOCKED_HOST_SUFFIXES = (
-    "wikipedia.org",
-    "wikimedia.org",
-    "reddit.com",
-    "quora.com",
-    "stackoverflow.com",
-    "youtube.com",
-    "youtu.be",
-    "facebook.com",
-    "instagram.com",
-    "twitter.com",
-    "x.com",
-    "linkedin.com",
-    "tiktok.com",
-    "pinterest.com",
-    "amazon.com",
-    "amazon.de",
-    "ebay.com",
-    "google.com",
-    "google.ru",
-    "yandex.ru",
-    "ya.ru",
-    "bing.com",
-    "chatgpt.com",
-    "openai.com",
-    "gemini.google.com",
-    "grokipedia.com",
-    "gabler-banklexikon.de",
-    "investopedia.com",
-    "britannica.com",
-    "medium.com",
-    "forbes.com",
-    "crunchbase.com",
-    "bloomberg.com",
-    "techcrunch.com",
-    "netguru.com",
-    "munich-startup.de",
-    "blockchain.com",
-    "learn.bybit.com",
-)
+
+def _blocked_suffixes() -> set:
+    try:
+        from config.settings import settings
+
+        return set(settings.SERP_BLOCKED_HOST_SUFFIXES or DEFAULT_BLOCKED_HOST_SUFFIXES)
+    except Exception:
+        return set(DEFAULT_BLOCKED_HOST_SUFFIXES)
 
 # URL path scoring for pick_urls_for_crawl (higher = crawl first / prefer per host).
 _HIGH_CONTACT_MARKERS = (
@@ -79,7 +46,7 @@ def is_blocked_url(url: str) -> bool:
     host = normalize_host(url)
     if not host:
         return True
-    blocked = set(settings.SERP_BLOCKED_HOST_SUFFIXES or DEFAULT_BLOCKED_HOST_SUFFIXES)
+    blocked = _blocked_suffixes()
     for suffix in blocked:
         s = suffix.lower().lstrip(".")
         if host == s or host.endswith("." + s):

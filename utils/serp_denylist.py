@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from config.settings import settings
 from models.database import CrawlLog, DomainContact
-from utils.serp_filters import DEFAULT_BLOCKED_HOST_SUFFIXES, normalize_host
+from utils.serp_constants import DEFAULT_BLOCKED_HOST_SUFFIXES
+from utils.serp_filters import normalize_host
 
 
 def suggest_blocked_hosts(
@@ -44,7 +45,10 @@ def suggest_blocked_hosts(
         if host:
             contact_hosts.add(host)
 
-    blocked = set(settings.SERP_BLOCKED_HOST_SUFFIXES or DEFAULT_BLOCKED_HOST_SUFFIXES)
+    try:
+        blocked = set(settings.SERP_BLOCKED_HOST_SUFFIXES or DEFAULT_BLOCKED_HOST_SUFFIXES)
+    except Exception:
+        blocked = set(DEFAULT_BLOCKED_HOST_SUFFIXES)
     suggestions: List[Tuple[str, int, str]] = []
 
     for domain, cnt in zero_rows:

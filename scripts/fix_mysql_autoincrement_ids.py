@@ -2,6 +2,13 @@
 
 Run on server:  python scripts/fix_mysql_autoincrement_ids.py
 """
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+
 from sqlalchemy import create_engine, text
 
 from config.settings import settings

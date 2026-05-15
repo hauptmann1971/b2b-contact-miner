@@ -34,11 +34,27 @@ class Settings(BaseSettings):
     LLM_HEALTHCHECK_TIMEOUT_SECONDS: int = 10
     
     USE_LLM_EXTRACTION: bool = True
-    
+    USE_LLM_DOMAIN_CLASSIFICATION: bool = False  # Extra LLM call per domain for tags only
+    SAVE_EMPTY_DOMAIN_CONTACTS: bool = False  # Skip DB row when no contacts found
+
+    # SERP filtering (provider-agnostic; works with duckduckgo, serpapi, etc.)
+    SERP_BLOCKED_HOST_SUFFIXES: List[str] = [
+        "wikipedia.org", "reddit.com", "youtube.com", "facebook.com", "instagram.com",
+        "twitter.com", "x.com", "linkedin.com", "google.com", "chatgpt.com",
+        "gemini.google.com", "grokipedia.com", "quora.com",
+    ]
+
     # Crawler Settings
     MAX_PAGES_PER_DOMAIN: int = 3  # Reduced for speed
-    REQUEST_TIMEOUT: int = 12  # Per navigation (networkidle), ms passed to Playwright
-    REQUEST_TIMEOUT_FALLBACK: int = 15  # domcontentloaded fallback if networkidle fails
+    PRIMARY_CONTACT_PATHS: List[str] = [
+        "/contact", "/contacts", "/contact-us", "/impressum", "/kontakt",
+    ]
+    CRAWL_WAIT_UNTIL: str = "domcontentloaded"  # Faster than networkidle
+    REQUEST_TIMEOUT: int = 12  # Per navigation (ms for Playwright)
+    REQUEST_TIMEOUT_FALLBACK: int = 18  # load-state fallback if primary fails
+    CRAWL_PAYLOAD_MAX_PAGES: int = 3
+    CRAWL_PAYLOAD_MAX_TEXT_CHARS: int = 15000
+    CRAWL_PAYLOAD_MAX_HTML_CHARS: int = 50000
     DOMAIN_CRAWL_TIMEOUT: int = 50  # Wall-clock cap for whole-domain crawl (see crawler wait_for)
     CONCURRENT_BROWSERS: int = 3  # Reduced from 5
     HEADLESS_BROWSER: bool = True
@@ -89,7 +105,7 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = 50
     
     # Pipeline Settings
-    SEARCH_RESULTS_PER_KEYWORD: int = 2  # Reduced for speed (was 5)
+    SEARCH_RESULTS_PER_KEYWORD: int = 5  # Filtered by SERP_BLOCKED_HOST_SUFFIXES before crawl
     MAX_KEYWORDS_PER_RUN: int = 50  # Максимальное количество ключевых слов за один запуск
     
     # Task Queue Retry Settings

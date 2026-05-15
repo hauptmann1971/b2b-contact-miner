@@ -126,7 +126,12 @@ class CrawlerService:
                                     pages_crawled += 1
                                     logger.info(f"Crawled [{prioritized_link.priority}] {prioritized_link.url}")
                                     
-                                    if prioritized_link.priority >= 8 and self._has_quick_contacts(page_data.get("text", "")):
+                                    page_text = page_data.get("text", "")
+                                    page_html = page_data.get("html", "")
+                                    if prioritized_link.priority >= 8 and (
+                                        self._has_quick_contacts(page_text)
+                                        or self._has_quick_contacts(page_html)
+                                    ):
                                         logger.info(f"Found contacts on high-priority page, stopping early for {domain}")
                                         break
                                 
@@ -173,10 +178,18 @@ class CrawlerService:
     def _build_prioritized_queue(self, base_url: str, sitemap_urls: List[str] = None) -> List[PrioritizedLink]:
         """Build prioritized queue of pages to crawl"""
         queue = []
-        
-        for path in settings.CONTACT_PATHS:
+        seen_urls = set()
+
+        def _add(path: str, priority: int) -> None:
             full_url = urljoin(base_url, path)
-            queue.append(PrioritizedLink(full_url, priority=10, depth=0))
+            if full_url not in seen_urls:
+                seen_urls.add(full_url)
+                queue.append(PrioritizedLink(full_url, priority, 0))
+
+        for path in settings.PRIMARY_CONTACT_PATHS:
+            _add(path, 10)
+        for path in settings.CONTACT_PATHS:
+            _add(path, 9 if path in settings.PRIMARY_CONTACT_PATHS else 7)
         
         if sitemap_urls:
             for url in sitemap_urls:
@@ -230,15 +243,12 @@ class CrawlerService:
         fallback_timeout: int,
     ) -> Dict[str, str]:
         """Navigate and read DOM (used under asyncio.wait_for hard wall clock cap)."""
+        primary_wait = settings.CRAWL_WAIT_UNTIL or "domcontentloaded"
+        fallback_wait = "load" if primary_wait == "domcontentloaded" else "domcontentloaded"
         try:
-            await page.goto(url, timeout=primary_timeout, wait_until="networkidle")
+            await page.goto(url, timeout=primary_timeout, wait_until=primary_wait)
         except Exception:
-            # Some sites never reach "networkidle" due to trackers/streams; fallback to DOM ready.
-            await page.goto(
-                url,
-                timeout=fallback_timeout,
-                wait_until="domcontentloaded",
-            )
+            await page.goto(url, timeout=fallback_timeout, wait_until=fallback_wait)
         await asyncio.sleep(1)
 
         # Prefer rendered body text, fallback to textContent for dynamic pages.

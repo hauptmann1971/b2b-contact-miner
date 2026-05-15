@@ -1,6 +1,26 @@
 from sqlalchemy import text
 
 
+def get_recent_contacts(db, limit: int = 20):
+    """Latest contacts from normalized `contacts` table (avoids empty contacts_json on domain_contacts)."""
+    rows = db.execute(
+        text(
+            """
+        SELECT LOWER(CAST(c.contact_type AS CHAR)) AS contact_type,
+               c.value,
+               dc.domain AS domain,
+               c.created_at
+        FROM contacts c
+        JOIN domain_contacts dc ON dc.id = c.domain_contact_id
+        ORDER BY c.created_at DESC
+        LIMIT :limit
+        """
+        ),
+        {"limit": limit},
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
 def get_contact_type_counts(db):
     """Return contact type counters robustly for enum and legacy rows."""
     rows = db.execute(

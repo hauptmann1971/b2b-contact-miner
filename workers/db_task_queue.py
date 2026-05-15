@@ -146,6 +146,7 @@ class DatabaseTaskQueue:
             }
             max_retries = retry_map.get(task_type, 3)
         
+        db = None
         try:
             db = SessionLocal()
             task = TaskQueue(
@@ -165,11 +166,16 @@ class DatabaseTaskQueue:
             logger.debug(f"Task added to DB queue: {task.id} ({task_type}) [priority={priority}, keyword={keyword_id}]")
             return task.id
         except Exception as e:
-            db.rollback()
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception as rollback_error:
+                    logger.debug(f"Non-critical error rolling back DB session: {rollback_error}")
             logger.error(f"Failed to add task to DB: {e}")
             raise
         finally:
-            self._safe_close_db(db)
+            if db is not None:
+                self._safe_close_db(db)
     
     async def _worker(self, worker_id: int):
         """Worker that processes tasks from database"""

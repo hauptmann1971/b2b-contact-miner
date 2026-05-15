@@ -1,7 +1,7 @@
 """SERP result filtering and query building (provider-agnostic)."""
 from __future__ import annotations
 
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 from urllib.parse import urlparse
 
 from config.settings import settings
@@ -42,6 +42,23 @@ DEFAULT_BLOCKED_HOST_SUFFIXES = (
     "crunchbase.com",
     "bloomberg.com",
     "techcrunch.com",
+    "netguru.com",
+    "munich-startup.de",
+    "blockchain.com",
+)
+
+# URL path scoring for pick_urls_for_crawl (higher = crawl first / prefer per host).
+_HIGH_CONTACT_MARKERS = (
+    "/contact", "/contacts", "/contact-us", "/kontakt", "/impressum", "/reach-us",
+)
+_MEDIUM_CONTACT_MARKERS = (
+    "/about", "/about-us", "/team", "/our-team", "/leadership", "/company", "/who-we-are",
+)
+_LOW_VALUE_MARKERS = (
+    "/blog", "/news", "/press", "/article", "/post/", "/tag/", "/category/", "/stories/",
+)
+_SKIP_PATH_EXTENSIONS = (
+    ".pdf", ".zip", ".doc", ".docx", ".xls", ".xlsx", ".mp4", ".jpg", ".jpeg", ".png", ".gif",
 )
 
 
@@ -106,13 +123,43 @@ def _needs_domain_fallback(url: str) -> bool:
     return len(path) > 1 and any(m in path for m in markers)
 
 
+def score_crawl_url(url: str) -> int:
+    """
+    Score SERP URL for crawl priority. Higher is better.
+    PDF/archives and similar paths return a large negative score (skip).
+    """
+    path = (urlparse(url).path or "").lower()
+    if any(path.endswith(ext) for ext in _SKIP_PATH_EXTENSIONS):
+        return -1000
+
+    score = 0
+    for marker in _HIGH_CONTACT_MARKERS:
+        if marker in path:
+            score += 100
+    for marker in _MEDIUM_CONTACT_MARKERS:
+        if marker in path:
+            score += 60
+    for marker in _LOW_VALUE_MARKERS:
+        if marker in path:
+            score -= 45
+
+    stripped = path.rstrip("/")
+    if stripped in ("", ""):
+        score += 25
+
+    segments = [s for s in path.split("/") if s]
+    if len(segments) >= 4 and score < 60:
+        score -= 15
+
+    return score
+
+
 def pick_urls_for_crawl(results: List[Dict]) -> List[str]:
     """
-    Dedupe by registrable host; prefer article URL + root when article-like.
-    Returns unique crawl candidate URLs in priority order.
+    Dedupe by host; keep highest-scored URL per host; order hosts by score descending.
+    Article-like SERP URLs also consider domain root as a fallback candidate.
     """
-    seen_hosts: Set[str] = set()
-    urls: List[str] = []
+    host_best: Dict[str, Tuple[int, str]] = {}
 
     for result in results:
         url = (result.get("url") or "").strip()
@@ -129,10 +176,15 @@ def pick_urls_for_crawl(results: List[Dict]) -> List[str]:
                 candidates.append(root)
 
         for candidate in candidates:
-            h = normalize_host(candidate)
-            if h in seen_hosts:
+            if is_blocked_url(candidate):
                 continue
-            seen_hosts.add(h)
-            urls.append(candidate)
+            crawl_score = score_crawl_url(candidate)
+            if crawl_score <= -1000:
+                continue
+            h = normalize_host(candidate)
+            prev = host_best.get(h)
+            if prev is None or crawl_score > prev[0]:
+                host_best[h] = (crawl_score, candidate)
 
-    return urls
+    ranked = sorted(host_best.values(), key=lambda item: item[0], reverse=True)
+    return [url for _, url in ranked]

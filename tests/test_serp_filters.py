@@ -4,6 +4,7 @@ from utils.serp_filters import (
     is_blocked_url,
     normalize_host,
     pick_urls_for_crawl,
+    score_crawl_url,
 )
 
 
@@ -31,11 +32,30 @@ def test_filter_drops_blocked():
     assert "example.com" in out[0]["url"]
 
 
-def test_pick_urls_dedupes_by_host():
+def test_pick_urls_dedupes_by_host_prefers_about_over_blog():
     results = [
         {"url": "https://example.com/blog/post-1"},
         {"url": "https://www.example.com/about"},
     ]
     urls = pick_urls_for_crawl(results)
-    hosts = {normalize_host(u) for u in urls}
-    assert hosts == {"example.com"}
+    assert len(urls) == 1
+    assert "/about" in urls[0]
+
+
+def test_pick_urls_orders_contact_before_blog_hosts():
+    results = [
+        {"url": "https://blogcorp.com/news/item"},
+        {"url": "https://acme.com/contact-us"},
+    ]
+    urls = pick_urls_for_crawl(results)
+    assert len(urls) == 2
+    assert "acme.com" in urls[0]
+
+
+def test_score_skips_pdf():
+    assert score_crawl_url("https://example.com/brochure.pdf") <= -1000
+    assert pick_urls_for_crawl([{"url": "https://example.com/brochure.pdf"}]) == []
+
+
+def test_is_blocked_netguru():
+    assert is_blocked_url("https://www.netguru.com/clients")

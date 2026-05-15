@@ -44,6 +44,7 @@ class Settings(BaseSettings):
         "gemini.google.com", "grokipedia.com", "quora.com",
         "investopedia.com", "britannica.com", "medium.com", "forbes.com",
         "crunchbase.com", "bloomberg.com", "techcrunch.com",
+        "netguru.com", "munich-startup.de", "blockchain.com",
     ]
     SERP_SNIPPET_SKIP_CRAWL: bool = True  # Skip Playwright when snippet has email/Telegram
     SERP_DENYLIST_LOOKBACK_DAYS: int = 7
@@ -111,7 +112,7 @@ class Settings(BaseSettings):
     ]
     
     # Parallel Processing
-    MAX_CONCURRENT_DOMAINS: int = 20
+    MAX_CONCURRENT_DOMAINS: int = 12  # Lower than 20 — less Playwright contention on VPS
     BATCH_SIZE: int = 50
     
     # Pipeline Settings

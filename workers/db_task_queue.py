@@ -71,6 +71,25 @@ class DatabaseTaskQueue:
         path = (parsed.path or "").lower()
         article_markers = ["/news/", "/article", "/press", "/blog/", "/post/", ".html", ".htm"]
         return len(path) > 1 and any(marker in path for marker in article_markers)
+
+    @staticmethod
+    def _dependency_satisfied(parent: Optional[TaskQueue], child: TaskQueue) -> bool:
+        """Return True when child task may run given parent task state."""
+        if parent is None:
+            return True
+        if parent.status == "completed":
+            return True
+        if parent.status == "failed":
+            # Crawl tasks are enqueued during search before search task completion;
+            # a failed search (e.g. duplicate PK on flush) must not block them forever.
+            if parent.task_type == "search_keyword" and child.task_type in (
+                "crawl_domain",
+                "extract_contacts",
+            ):
+                return True
+            if parent.task_type == "crawl_domain" and child.task_type == "extract_contacts":
+                return True
+        return False
     
     async def start_workers(self):
         """Start worker tasks and recover stale tasks"""
@@ -205,9 +224,7 @@ class DatabaseTaskQueue:
                     parent = db.query(TaskQueue).filter(
                         TaskQueue.id == task.depends_on_task_id
                     ).first()
-                    
-                    if not parent or parent.status != 'completed':
-                        # Parent not completed yet, skip this task
+                    if not self._dependency_satisfied(parent, task):
                         continue
                 
                 # Atomically claim the task to avoid multiple workers taking the same row.

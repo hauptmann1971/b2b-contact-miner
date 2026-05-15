@@ -1,5 +1,6 @@
+import json
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set, Tuple
 from email_validator import validate_email, EmailNotValidError
 from config.settings import settings
 from loguru import logger
@@ -52,10 +53,9 @@ class ExtractionService:
             "youtube": set(),
         }
         
-        needs_llm_fallback = False
-        llm_candidate_pages = []
-        llm_data = None  # Will store {request, response, model} if LLM used
-        
+        llm_snippets: List[str] = []
+        llm_data = None
+
         for item in content_list:
             content = item.get("content", "")
             html = item.get("html", "")
@@ -67,15 +67,21 @@ class ExtractionService:
                 if self._is_valid_business_email(email):
                     emails.add(self._normalize_email(email))
             
-            mailto_matches = self.mailto_pattern.finditer(content)
-            for match in mailto_matches:
-                email = match.group(1).strip()
-                email = email.split('?')[0]
-                if self._is_valid_business_email(email):
-                    emails.add(self._normalize_email(email))
-            
-            has_obfuscation = any(re.search(pattern, content, re.IGNORECASE) 
-                                 for pattern in self.obfuscation_patterns)
+            for blob in (content, html):
+                for match in self.mailto_pattern.finditer(blob):
+                    email = match.group(1).strip().split("?")[0]
+                    if self._is_valid_business_email(email):
+                        emails.add(self._normalize_email(email))
+
+            ld_emails, ld_tg, ld_li = self._extract_json_ld_contacts(html)
+            emails.update(ld_emails)
+            telegram_links.update(ld_tg)
+            linkedin_links.update(ld_li)
+
+            has_obfuscation = any(
+                re.search(pattern, content, re.IGNORECASE)
+                for pattern in self.obfuscation_patterns
+            )
             
             telegram_matches = self.telegram_pattern.finditer(content)
             for match in telegram_matches:
@@ -132,14 +138,16 @@ class ExtractionService:
                 if len(cleaned) >= 10:
                     phone_numbers.add(phone)
             
-            if page_type == "contact_page" and has_obfuscation and len(emails) < 2:
-                llm_candidate_pages.append(content[:3000])
-                needs_llm_fallback = True
-        
-        if needs_llm_fallback and settings.USE_LLM_EXTRACTION:
-            logger.info(f"Applying LLM fallback for {len(llm_candidate_pages)} pages with obfuscated emails")
-            llm_contacts, llm_data = self._extract_with_llm_selective(llm_candidate_pages)
-            
+            if has_obfuscation or page_type == "contact_page":
+                llm_snippets.append((content or html)[:3000])
+
+        if (
+            settings.USE_LLM_EXTRACTION
+            and not self._has_any_contacts(emails, telegram_links, linkedin_links, social_links)
+            and llm_snippets
+        ):
+            logger.info("Applying LLM fallback (no contacts from regex/JSON-LD)")
+            llm_contacts, llm_data = self._extract_with_llm_selective(llm_snippets[:3])
             emails.update(llm_contacts.emails)
             telegram_links.update(llm_contacts.telegram_links)
             linkedin_links.update(llm_contacts.linkedin_links)
@@ -156,8 +164,59 @@ class ExtractionService:
             social_links={k: sorted(list(v)) for k, v in social_links.items() if v}
         ), llm_data
     
+    @staticmethod
+    def _has_any_contacts(emails, telegram_links, linkedin_links, social_links) -> bool:
+        if emails or telegram_links or linkedin_links:
+            return True
+        return any(social_links.get(p) for p in social_links)
+
+    def _extract_json_ld_contacts(self, html: str) -> Tuple[Set[str], Set[str], Set[str]]:
+        emails: Set[str] = set()
+        telegram_links: Set[str] = set()
+        linkedin_links: Set[str] = set()
+        if not html:
+            return emails, telegram_links, linkedin_links
+        for raw in re.findall(
+            r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        ):
+            try:
+                payload = json.loads(raw.strip())
+            except json.JSONDecodeError:
+                continue
+            self._walk_json_ld(payload, emails, telegram_links, linkedin_links)
+        return emails, telegram_links, linkedin_links
+
+    def _walk_json_ld(self, node, emails: Set[str], telegram_links: Set[str], linkedin_links: Set[str]) -> None:
+        if isinstance(node, list):
+            for item in node:
+                self._walk_json_ld(item, emails, telegram_links, linkedin_links)
+        elif isinstance(node, dict):
+            email_val = node.get("email")
+            if isinstance(email_val, str) and self._is_valid_business_email(email_val):
+                emails.add(self._normalize_email(email_val))
+            same_as = node.get("sameAs")
+            if isinstance(same_as, str):
+                same_as = [same_as]
+            if isinstance(same_as, list):
+                for link in same_as:
+                    if not isinstance(link, str):
+                        continue
+                    if "t.me" in link or "telegram" in link:
+                        tg = self._normalize_telegram_link(link)
+                        if tg:
+                            telegram_links.add(tg)
+                    if "linkedin.com" in link:
+                        li = self._normalize_url(link)
+                        if li:
+                            linkedin_links.add(li)
+            for value in node.values():
+                if isinstance(value, (dict, list)):
+                    self._walk_json_ld(value, emails, telegram_links, linkedin_links)
+
     def _extract_with_llm_selective(self, obfuscated_contents: List[str]) -> tuple:
-        """Use LLM only for pages with obfuscated emails
+        """Use LLM when regex/JSON-LD found nothing useful.
         Returns: (ContactInfo, llm_data) where llm_data has request/response/model
         """
         # Determine which LLM to use (priority: YandexGPT > DeepSeek > OpenAI)

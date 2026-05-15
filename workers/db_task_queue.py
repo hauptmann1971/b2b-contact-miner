@@ -12,6 +12,8 @@ from services.serp_service import SerpService
 from services.crawler_service import CrawlerService
 from services.extraction_service import ExtractionService
 from urllib.parse import urlparse
+from utils.crawl_payload import pack_crawl_content, unpack_crawl_content
+from utils.serp_filters import build_search_query, filter_search_results, pick_urls_for_crawl
 
 
 class DatabaseTaskQueue:
@@ -331,71 +333,81 @@ class DatabaseTaskQueue:
         
         # Perform search
         serp = self._get_serp_service()
+        search_query = build_search_query(keyword_text, language=language, country=country)
         search_results, raw_response = serp.search(
-            query=keyword_text,
+            query=search_query,
             country=country,
             language=language,
-            num_results=settings.SEARCH_RESULTS_PER_KEYWORD
+            num_results=settings.SEARCH_RESULTS_PER_KEYWORD,
         )
-        
+
+        search_results = filter_search_results(search_results)
         if not search_results:
-            logger.warning(f"No search results for keyword {keyword_id}")
+            logger.warning(f"No usable search results for keyword {keyword_id} after filtering")
             return
-        
+
+        crawl_urls = pick_urls_for_crawl(search_results)
+        if not crawl_urls:
+            logger.warning(f"No crawl URLs for keyword {keyword_id} after dedupe/filter")
+            return
+
         # Save search results to DB
         db = SessionLocal()
         try:
-            raw_query = f"{keyword_text} site:{country}" if country else keyword_text
+            raw_query = search_query
             serp.save_results(db, keyword_id, search_results, raw_query, raw_response)
-            logger.info(f"✓ Saved {len(search_results)} search results for keyword {keyword_id}")
-            
-            # Create crawl tasks for each URL (+ optional domain-root fallback)
-            queued_urls = set()
-            for idx, result in enumerate(search_results):
-                url = result['url']
-                candidate_urls = [url]
-                if self._needs_domain_fallback(url):
-                    candidate_urls.append(self._root_url(url))
+            logger.info(
+                f"✓ Saved {len(search_results)} SERP rows, "
+                f"queueing {len(crawl_urls)} crawl URL(s) for keyword {keyword_id}"
+            )
 
-                for candidate_url in candidate_urls:
-                    if candidate_url in queued_urls:
-                        continue
+            url_to_result = {}
+            for result in search_results:
+                url_to_result[result["url"]] = result
 
-                    # Ensure SearchResult exists for this candidate URL
-                    sr = db.query(SearchResult).filter(
-                        SearchResult.keyword_id == keyword_id,
-                        SearchResult.url == candidate_url
-                    ).first()
+            for candidate_url in crawl_urls:
+                result = url_to_result.get(candidate_url)
+                if not result:
+                    for r in search_results:
+                        if self._root_url(r["url"]) == candidate_url:
+                            result = r
+                            break
+                    if not result:
+                        result = {"title": None, "snippet": None, "position": None}
 
-                    if not sr:
-                        sr = SearchResult(
-                            keyword_id=keyword_id,
-                            url=candidate_url,
-                            title=result.get('title'),
-                            snippet=result.get('snippet'),
-                            position=result.get('position'),
-                            raw_search_query=raw_query,
-                            raw_search_response=raw_response
-                        )
-                        db.add(sr)
-                        db.flush()
+                sr = db.query(SearchResult).filter(
+                    SearchResult.keyword_id == keyword_id,
+                    SearchResult.url == candidate_url,
+                ).first()
 
-                    queued_urls.add(candidate_url)
-                    await self.add_task(
-                        task_name=f"crawl_{sr.id}",
-                        task_type='crawl_domain',
-                        payload={
-                            'search_result_id': sr.id,
-                            'url': candidate_url,
-                            'keyword_id': keyword_id
-                        },
-                        priority=5,
+                if not sr:
+                    sr = SearchResult(
                         keyword_id=keyword_id,
-                        depends_on_task_id=task_id  # Depends on search completion
+                        url=candidate_url,
+                        title=result.get("title"),
+                        snippet=result.get("snippet"),
+                        position=result.get("position"),
+                        raw_search_query=raw_query,
+                        raw_search_response=raw_response,
                     )
-            
+                    db.add(sr)
+                    db.flush()
+
+                await self.add_task(
+                    task_name=f"crawl_{sr.id}",
+                    task_type="crawl_domain",
+                    payload={
+                        "search_result_id": sr.id,
+                        "url": candidate_url,
+                        "keyword_id": keyword_id,
+                    },
+                    priority=5,
+                    keyword_id=keyword_id,
+                    depends_on_task_id=task_id,
+                )
+
             db.commit()
-            logger.info(f"✓ Created {len(queued_urls)} crawl tasks for keyword {keyword_id}")
+            logger.info(f"✓ Created {len(crawl_urls)} crawl tasks for keyword {keyword_id}")
             
         except Exception as e:
             db.rollback()
@@ -454,25 +466,27 @@ class DatabaseTaskQueue:
                     parsed = urlparse(item['url'])
                     contact_page_urls.append(parsed.path)
             
-            # Create extract task
-            if contact_page_urls or crawl_data.get("content"):
+            packed_content = pack_crawl_content(crawl_data.get("content") or [])
+            if packed_content or contact_page_urls:
                 await self.add_task(
                     task_name=f"extract_{search_result_id}",
-                    task_type='extract_contacts',
+                    task_type="extract_contacts",
                     payload={
-                        'search_result_id': search_result_id,
-                        'url': url,
-                        'domain': crawl_data['domain'],
-                        'keyword_id': keyword_id,
-                        'contact_page_urls': contact_page_urls[:5]  # Limit to top 5
+                        "search_result_id": search_result_id,
+                        "url": url,
+                        "domain": crawl_data["domain"],
+                        "keyword_id": keyword_id,
+                        "contact_page_urls": contact_page_urls[:5],
+                        "pre_crawled_content": packed_content,
+                        "pages_crawled": crawl_data.get("pages_crawled", 0),
                     },
                     priority=7,
                     keyword_id=keyword_id,
-                    depends_on_task_id=task_id
+                    depends_on_task_id=task_id,
                 )
-                logger.info(f"✓ Created extract task for {url}")
+                logger.info(f"✓ Created extract task for {url} ({len(packed_content)} pages in payload)")
             else:
-                logger.warning(f"No contact pages found for {url}")
+                logger.warning(f"No crawl content for {url}, skipping extract")
             
         except Exception as e:
             db.rollback()
@@ -493,30 +507,42 @@ class DatabaseTaskQueue:
             raise ValueError("Missing search_result_id or domain in payload")
         
         logger.info(f"🔎 Extracting contacts from {domain}")
-        
-        # Phase 1: crawl contact pages (fast mode)
-        crawler = self._get_crawler_service()
-        if contact_page_urls:
-            crawl_data = await crawler.crawl_contact_pages(url, contact_page_urls)
-        else:
-            # No pre-identified contact pages: use full crawl directly
-            crawl_data = await crawler.crawl_domain(url)
-        
-        if not crawl_data.get("content"):
-            logger.warning(f"No content to extract from {domain}")
-            return
-        
-        # Extract contacts
-        extractor = self._get_extraction_service()
-        contacts, llm_data = extractor.extract_contacts(crawl_data["content"])
 
-        # Phase 2 fallback: run full crawl only if fast phase found no contacts.
-        if contact_page_urls and not (contacts.emails or contacts.telegram_links or contacts.linkedin_links):
-            logger.info(f"No contacts in fast mode for {domain}; running full domain fallback crawl")
-            full_crawl_data = await crawler.crawl_domain(url)
-            if full_crawl_data.get("content"):
-                contacts, llm_data = extractor.extract_contacts(full_crawl_data["content"])
-                crawl_data = full_crawl_data
+        pre_crawled = unpack_crawl_content(payload.get("pre_crawled_content"))
+        extractor = self._get_extraction_service()
+        crawl_data: Dict = {"content": pre_crawled, "domain": domain, "pages_crawled": payload.get("pages_crawled", 0)}
+
+        if pre_crawled:
+            logger.info(f"Using {len(pre_crawled)} pre-crawled page(s) for {domain} (no repeat Playwright)")
+            contacts, llm_data = extractor.extract_contacts(pre_crawled)
+        else:
+            crawler = self._get_crawler_service()
+            if contact_page_urls:
+                crawl_data = await crawler.crawl_contact_pages(url, contact_page_urls)
+            else:
+                crawl_data = await crawler.crawl_domain(url)
+            if not crawl_data.get("content"):
+                logger.warning(f"No content to extract from {domain}")
+                return
+            contacts, llm_data = extractor.extract_contacts(crawl_data["content"])
+
+        if not (
+            contacts.emails
+            or contacts.telegram_links
+            or contacts.linkedin_links
+            or any(contacts.social_links.values())
+        ):
+            if pre_crawled and contact_page_urls:
+                logger.info(f"No contacts from pre-crawl for {domain}; one-shot fallback crawl")
+                crawler = self._get_crawler_service()
+                full_crawl_data = await crawler.crawl_domain(url)
+                if full_crawl_data.get("content"):
+                    contacts, llm_data = extractor.extract_contacts(full_crawl_data["content"])
+                    crawl_data = full_crawl_data
+            elif not pre_crawled:
+                pass
+            else:
+                logger.info(f"No contacts found for {domain} after extraction")
         
         # Verify emails via MX records
         if contacts.emails:
@@ -535,8 +561,8 @@ class DatabaseTaskQueue:
                     tags.append(keyword_obj.keyword)
                     logger.info(f"Added keyword as tag: {keyword_obj.keyword}")
                 
-                # 2. Use LLM to classify domain category (if enabled)
-                if settings.USE_LLM_EXTRACTION and crawl_data.get("content"):
+                # 2. Optional LLM category tags (off by default — saves 1 LLM call per domain)
+                if settings.USE_LLM_DOMAIN_CLASSIFICATION and crawl_data.get("content"):
                     # Combine all page content for classification
                     combined_content = "\n\n".join([
                         item.get("content", "")[:1000] 
@@ -565,22 +591,33 @@ class DatabaseTaskQueue:
                     except Exception:
                         pass
             
-            # Create DomainContact with JSON
+            has_contacts = bool(
+                contacts.emails
+                or contacts.telegram_links
+                or contacts.linkedin_links
+                or any((contacts.social_links or {}).values())
+            )
+            if not has_contacts and not settings.SAVE_EMPTY_DOMAIN_CONTACTS:
+                logger.info(f"Skipping empty DomainContact for {domain}")
+                db.commit()
+                return
+
             contacts_data = {
                 "emails": contacts.emails,
                 "telegram": contacts.telegram_links,
                 "linkedin": contacts.linkedin_links,
-                "phones": contacts.phone_numbers if hasattr(contacts, 'phone_numbers') else [],
-                "social": contacts.social_links if hasattr(contacts, 'social_links') else {}
+                "phones": contacts.phone_numbers if hasattr(contacts, "phone_numbers") else [],
+                "social": contacts.social_links if hasattr(contacts, "social_links") else {},
             }
-            
+            extraction_method = "llm" if llm_data else "regex"
+
             domain_contact = DomainContact(
                 search_result_id=search_result_id,
                 domain=domain,
-                tags=tags,  # ← Hybrid tags: keyword + LLM categories
+                tags=tags,
                 contacts_json=contacts_data,
                 confidence_score=extractor.calculate_confidence(contacts),
-                extraction_method="llm" if settings.USE_LLM_EXTRACTION else "regex"
+                extraction_method=extraction_method,
             )
             db.add(domain_contact)
             db.flush()  # Get the ID

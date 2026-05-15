@@ -1,10 +1,12 @@
 import requests
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from config.settings import settings
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 from models.database import SearchResult
 from sqlalchemy.orm import Session
+from utils.yandex_search_mapping import yandex_l10n, yandex_search_type
+from utils.yandex_search_xml import parse_api_response_body
 
 
 class SerpService:
@@ -18,7 +20,8 @@ class SerpService:
             "serpapi": settings.SERPAPI_KEY,
             "brightdata": settings.BRIGHTDATA_API_KEY,
             "scraperapi": settings.SCRAPERAPI_KEY,
-            "duckduckgo": "",  # No API key needed
+            "duckduckgo": "",
+            "yandex": settings.YANDEX_IAM_TOKEN,
         }
         return keys.get(self.provider, "")
     
@@ -31,10 +34,71 @@ class SerpService:
             return self._duckduckgo_search(query, country, language, num_results)
         elif self.provider == "serpapi":
             return self._serpapi_search(query, country, language, num_results)
+        elif self.provider == "yandex":
+            return self._yandex_search(query, country, language, num_results)
         elif self.provider == "brightdata":
             return self._brightdata_search(query, country, language, num_results)
         else:
             raise ValueError(f"Unsupported SERP provider: {self.provider}")
+
+    def _yandex_search(
+        self, query: str, country: str, language: str, num_results: int
+    ) -> Tuple[List[Dict], dict]:
+        """Yandex Cloud Search API v2 (CIS-friendly web search)."""
+        if not settings.YANDEX_IAM_TOKEN or not settings.YANDEX_FOLDER_ID:
+            raise ValueError("YANDEX_IAM_TOKEN and YANDEX_FOLDER_ID required for SERP provider yandex")
+
+        url = settings.YANDEX_SEARCH_API_URL
+        headers = {
+            "Authorization": f"Bearer {settings.YANDEX_IAM_TOKEN}",
+            "Content-Type": "application/json",
+        }
+        n = max(1, min(int(num_results), 20))
+        payload = {
+            "query": {
+                "searchType": yandex_search_type(country),
+                "queryText": query[:400],
+                "familyMode": "FAMILY_MODE_MODERATE",
+                "page": 0,
+                "fixTypoMode": "FIX_TYPO_MODE_ON",
+            },
+            "folderId": settings.YANDEX_FOLDER_ID,
+            "maxPassages": min(3, n),
+            "l10n": yandex_l10n(language),
+            "responseFormat": "FORMAT_XML",
+            "groupSpec": {
+                "groupMode": "GROUP_MODE_FLAT",
+                "groupsOnPage": n,
+                "docsInGroup": 1,
+            },
+        }
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=settings.YANDEX_SEARCH_TIMEOUT,
+        )
+        if response.status_code == 403:
+            raise PermissionError(
+                "Yandex Search API 403: assign role search-api.webSearch.user on folder "
+                f"{settings.YANDEX_FOLDER_ID} for your OAuth user. See doc/YANDEX_SEARCH_SETUP.md"
+            )
+        response.raise_for_status()
+        data = response.json()
+        results = parse_api_response_body(data, max_results=n)
+        raw_response = {
+            "provider": "yandex",
+            "query": query,
+            "country": country,
+            "language": language,
+            "search_type": payload["query"]["searchType"],
+            "max_results": n,
+            "results_count": len(results),
+            "raw_data": data,
+        }
+        logger.info(f"Yandex Search returned {len(results)} results for '{query}' ({country})")
+        return results, raw_response
     
     def _serpapi_search(self, query: str, country: str, language: str, num_results: int) -> tuple:
         """Search using SerpAPI"""

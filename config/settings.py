@@ -11,8 +11,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     
     # SERP API (choose one provider)
-    SERP_API_PROVIDER: str = "serpapi"
+    SERP_API_PROVIDER: str = "serpapi"  # duckduckgo | serpapi | yandex
     SERPAPI_KEY: str = ""
+    YANDEX_SEARCH_API_URL: str = "https://searchapi.api.cloud.yandex.net/v2/web/search"
+    YANDEX_SEARCH_TIMEOUT: int = 30
     BRIGHTDATA_API_KEY: str = ""
     SCRAPERAPI_KEY: str = ""
     

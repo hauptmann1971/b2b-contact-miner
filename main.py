@@ -71,6 +71,13 @@ class ContactMiningPipeline:
                 logger.warning("Preflight: SERP provider is serpapi but SERPAPI_KEY is empty")
             elif provider == "duckduckgo":
                 logger.info("Preflight: using DuckDuckGo provider (no API key required)")
+            elif provider == "yandex":
+                if not settings.YANDEX_IAM_TOKEN or not settings.YANDEX_FOLDER_ID:
+                    logger.warning(
+                        "Preflight: SERP provider is yandex but YANDEX_IAM_TOKEN or YANDEX_FOLDER_ID is empty"
+                    )
+                else:
+                    logger.info("Preflight: using Yandex Search API (IAM + folder)")
 
             # LLM fallback readiness
             if settings.USE_LLM_EXTRACTION:

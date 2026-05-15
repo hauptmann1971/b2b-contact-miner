@@ -4,7 +4,7 @@ from flask import current_app, flash, redirect, render_template, request, url_fo
 from sqlalchemy import desc, text
 
 from models.database import Contact, DomainContact, Keyword, PipelineState, SearchResult, SessionLocal
-from utils.web_stats import get_contact_type_counts
+from utils.web_stats import get_contact_type_counts, get_recent_contacts
 
 DEFAULT_LANGUAGES = ["ru", "en", "kk", "uz", "ky", "tg", "az", "hy", "ka", "be", "ro", "de", "fr"]
 DEFAULT_COUNTRIES = ["RU", "KZ", "UZ", "KG", "TJ", "TM", "AZ", "AM", "GE", "BY", "MD", "UA", "MN", "AF", "PK", "US", "GB", "DE", "FR"]
@@ -46,31 +46,7 @@ def _build_user_dashboard_context(db):
 
     recent_keywords = db.query(Keyword).order_by(desc(Keyword.created_at)).limit(10).all()
     recent_runs = db.query(PipelineState).order_by(desc(PipelineState.started_at)).limit(10).all()
-    recent_domains = (
-        db.query(DomainContact)
-        .filter(DomainContact.contacts_json.isnot(None))
-        .order_by(desc(DomainContact.created_at))
-        .limit(20)
-        .all()
-    )
-    recent_contact_rows = []
-    for domain_item in recent_domains:
-        payload = domain_item.contacts_json or {}
-        if not isinstance(payload, dict):
-            continue
-        for email in (payload.get("emails") or [])[:2]:
-            recent_contact_rows.append({"contact_type": "email", "value": email, "domain": domain_item.domain, "created_at": domain_item.created_at})
-        for tg in (payload.get("telegram") or [])[:2]:
-            recent_contact_rows.append({"contact_type": "telegram", "value": tg, "domain": domain_item.domain, "created_at": domain_item.created_at})
-        for li in (payload.get("linkedin") or [])[:2]:
-            recent_contact_rows.append({"contact_type": "linkedin", "value": li, "domain": domain_item.domain, "created_at": domain_item.created_at})
-        social_payload = payload.get("social") or {}
-        if isinstance(social_payload, dict):
-            for social_type, links in social_payload.items():
-                for link in (links or [])[:1]:
-                    recent_contact_rows.append({"contact_type": social_type, "value": link, "domain": domain_item.domain, "created_at": domain_item.created_at})
-        if len(recent_contact_rows) >= 20:
-            break
+    recent_contact_rows = get_recent_contacts(db, limit=20)
 
     type_counts = get_contact_type_counts(db)
     db_languages = [row[0] for row in db.query(Keyword.language).distinct().all() if row[0]]
@@ -89,7 +65,7 @@ def _build_user_dashboard_context(db):
         "linkedin_count": type_counts["linkedin"],
         "phone_count": type_counts["phone"],
         "recent_runs": recent_runs,
-        "recent_contacts": recent_contact_rows[:20],
+        "recent_contacts": recent_contact_rows,
         "language_options": language_options,
         "country_options": country_options,
     }

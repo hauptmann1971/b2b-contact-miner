@@ -20,6 +20,7 @@ from models.database import (  # noqa: E402
     SessionLocal,
 )
 from models.task_queue import TaskQueue  # noqa: E402
+from utils.serp_denylist import suggest_blocked_hosts  # noqa: E402
 
 
 def main() -> None:
@@ -101,6 +102,15 @@ def main() -> None:
         )
         for reason, cnt in reasons:
             print(f"  {cnt}x {(reason or 'null')[:70]}")
+
+        print("\n=== Suggested SERP denylist (zero-page, no contacts) ===")
+        suggestions = suggest_blocked_hosts(db)
+        if not suggestions:
+            print("  (none — run scripts/suggest_serp_denylist.py for details)")
+        else:
+            for host, cnt, reason in suggestions[:12]:
+                print(f"  {host} ({cnt}x) — {reason}")
+            print("  Run: python scripts/suggest_serp_denylist.py")
     finally:
         db.close()
 

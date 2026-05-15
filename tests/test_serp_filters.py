@@ -17,6 +17,10 @@ def test_is_blocked_wikipedia():
     assert is_blocked_url("https://en.wikipedia.org/wiki/Fintech")
 
 
+def test_is_blocked_investopedia():
+    assert is_blocked_url("https://www.investopedia.com/terms/fintech.asp")
+
+
 def test_filter_drops_blocked():
     results = [
         {"url": "https://example.com/contact"},

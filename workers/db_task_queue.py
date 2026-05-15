@@ -13,7 +13,11 @@ from services.crawler_service import CrawlerService
 from services.extraction_service import ExtractionService
 from urllib.parse import urlparse
 from utils.crawl_payload import pack_crawl_content, unpack_crawl_content
-from utils.serp_filters import build_search_query, filter_search_results, pick_urls_for_crawl
+from utils.serp_filters import build_search_query, filter_search_results, normalize_host, pick_urls_for_crawl
+from utils.serp_snippet import (
+    build_snippet_content_item,
+    snippet_has_actionable_contacts,
+)
 
 
 class DatabaseTaskQueue:
@@ -361,37 +365,86 @@ class DatabaseTaskQueue:
                 f"queueing {len(crawl_urls)} crawl URL(s) for keyword {keyword_id}"
             )
 
-            url_to_result = {}
-            for result in search_results:
-                url_to_result[result["url"]] = result
+            url_to_result = {r["url"]: r for r in search_results}
+            snippet_extract_count = 0
+            crawl_task_count = 0
+            snippet_skip_hosts: set = set()
 
-            for candidate_url in crawl_urls:
+            def _resolve_result(candidate_url: str) -> Dict:
                 result = url_to_result.get(candidate_url)
-                if not result:
-                    for r in search_results:
-                        if self._root_url(r["url"]) == candidate_url:
-                            result = r
-                            break
-                    if not result:
-                        result = {"title": None, "snippet": None, "position": None}
+                if result:
+                    return result
+                for r in search_results:
+                    if self._root_url(r["url"]) == candidate_url:
+                        return r
+                return {"title": None, "snippet": None, "position": None}
 
+            async def _ensure_search_result(candidate_url: str, result: Dict) -> SearchResult:
                 sr = db.query(SearchResult).filter(
                     SearchResult.keyword_id == keyword_id,
                     SearchResult.url == candidate_url,
                 ).first()
+                if sr:
+                    return sr
+                sr = SearchResult(
+                    keyword_id=keyword_id,
+                    url=candidate_url,
+                    title=result.get("title"),
+                    snippet=result.get("snippet"),
+                    position=result.get("position"),
+                    raw_search_query=raw_query,
+                    raw_search_response=raw_response,
+                )
+                db.add(sr)
+                db.flush()
+                return sr
 
-                if not sr:
-                    sr = SearchResult(
+            if settings.SERP_SNIPPET_SKIP_CRAWL:
+                for result in search_results:
+                    url = (result.get("url") or "").strip()
+                    if not url:
+                        continue
+                    host = normalize_host(url)
+                    if host in snippet_skip_hosts:
+                        continue
+                    if not snippet_has_actionable_contacts(
+                        result.get("title"), result.get("snippet")
+                    ):
+                        continue
+                    sr = await _ensure_search_result(url, result)
+                    snippet_skip_hosts.add(host)
+                    packed = pack_crawl_content([
+                        build_snippet_content_item(
+                            url, result.get("title"), result.get("snippet")
+                        )
+                    ])
+                    await self.add_task(
+                        task_name=f"extract_snippet_{sr.id}",
+                        task_type="extract_contacts",
+                        payload={
+                            "search_result_id": sr.id,
+                            "url": url,
+                            "domain": host or urlparse(url).netloc,
+                            "keyword_id": keyword_id,
+                            "pre_crawled_content": packed,
+                            "pages_crawled": 0,
+                            "serp_snippet_only": True,
+                        },
+                        priority=8,
                         keyword_id=keyword_id,
-                        url=candidate_url,
-                        title=result.get("title"),
-                        snippet=result.get("snippet"),
-                        position=result.get("position"),
-                        raw_search_query=raw_query,
-                        raw_search_response=raw_response,
+                        depends_on_task_id=task_id,
                     )
-                    db.add(sr)
-                    db.flush()
+                    snippet_extract_count += 1
+                    logger.info(f"📎 SERP snippet contacts for {url}; skipping crawl")
+
+            for candidate_url in crawl_urls:
+                host = normalize_host(candidate_url)
+                if host in snippet_skip_hosts:
+                    logger.debug(f"Skip crawl for {candidate_url} (snippet extract queued)")
+                    continue
+
+                result = _resolve_result(candidate_url)
+                sr = await _ensure_search_result(candidate_url, result)
 
                 await self.add_task(
                     task_name=f"crawl_{sr.id}",
@@ -405,9 +458,13 @@ class DatabaseTaskQueue:
                     keyword_id=keyword_id,
                     depends_on_task_id=task_id,
                 )
+                crawl_task_count += 1
 
             db.commit()
-            logger.info(f"✓ Created {len(crawl_urls)} crawl tasks for keyword {keyword_id}")
+            logger.info(
+                f"✓ Keyword {keyword_id}: {crawl_task_count} crawl, "
+                f"{snippet_extract_count} snippet-only extract"
+            )
             
         except Exception as e:
             db.rollback()
@@ -526,22 +583,26 @@ class DatabaseTaskQueue:
                 return
             contacts, llm_data = extractor.extract_contacts(crawl_data["content"])
 
+        serp_snippet_only = bool(payload.get("serp_snippet_only"))
+
         if not (
             contacts.emails
             or contacts.telegram_links
             or contacts.linkedin_links
             or any(contacts.social_links.values())
         ):
-            if pre_crawled and contact_page_urls:
+            if serp_snippet_only:
+                logger.info(f"No contacts from SERP snippet for {domain}")
+            elif pre_crawled and contact_page_urls:
                 logger.info(f"No contacts from pre-crawl for {domain}; one-shot fallback crawl")
                 crawler = self._get_crawler_service()
                 full_crawl_data = await crawler.crawl_domain(url)
                 if full_crawl_data.get("content"):
                     contacts, llm_data = extractor.extract_contacts(full_crawl_data["content"])
                     crawl_data = full_crawl_data
-            elif not pre_crawled:
+            elif not pre_crawled and not serp_snippet_only:
                 pass
-            else:
+            elif not serp_snippet_only:
                 logger.info(f"No contacts found for {domain} after extraction")
         
         # Verify emails via MX records

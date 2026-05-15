@@ -45,6 +45,7 @@ DEFAULT_BLOCKED_HOST_SUFFIXES = (
     "netguru.com",
     "munich-startup.de",
     "blockchain.com",
+    "learn.bybit.com",
 )
 
 # URL path scoring for pick_urls_for_crawl (higher = crawl first / prefer per host).

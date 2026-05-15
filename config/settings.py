@@ -45,6 +45,7 @@ class Settings(BaseSettings):
         "investopedia.com", "britannica.com", "medium.com", "forbes.com",
         "crunchbase.com", "bloomberg.com", "techcrunch.com",
         "netguru.com", "munich-startup.de", "blockchain.com",
+        "learn.bybit.com",
     ]
     SERP_SNIPPET_SKIP_CRAWL: bool = True  # Skip Playwright when snippet has email/Telegram
     SERP_DENYLIST_LOOKBACK_DAYS: int = 7

@@ -42,7 +42,17 @@ class Settings(BaseSettings):
         "wikipedia.org", "reddit.com", "youtube.com", "facebook.com", "instagram.com",
         "twitter.com", "x.com", "linkedin.com", "google.com", "chatgpt.com",
         "gemini.google.com", "grokipedia.com", "quora.com",
+        "investopedia.com", "britannica.com", "medium.com", "forbes.com",
+        "crunchbase.com", "bloomberg.com", "techcrunch.com",
     ]
+    SERP_SNIPPET_SKIP_CRAWL: bool = True  # Skip Playwright when snippet has email/Telegram
+    SERP_DENYLIST_LOOKBACK_DAYS: int = 7
+    SERP_DENYLIST_MIN_ZERO_CRAWLS: int = 3
+
+    # HTTP-first crawl (before Playwright)
+    HTTP_FETCH_ENABLED: bool = True
+    HTTP_FETCH_TIMEOUT: float = 8.0
+    HTTP_FETCH_MIN_TEXT_CHARS: int = 200
 
     # Crawler Settings
     MAX_PAGES_PER_DOMAIN: int = 3  # Reduced for speed

@@ -8,6 +8,8 @@ from urllib.parse import urljoin, urlparse
 import re
 from collections import deque
 
+from utils.http_fetch import fetch_page_http
+
 
 class PrioritizedLink:
     """Link with priority for crawling"""
@@ -49,11 +51,9 @@ class CrawlerService:
     
     async def crawl_domain(self, base_url: str) -> Dict:
         """Crawl a domain with prioritized link extraction and deduplication"""
-        base_url = self._normalize_base_url(base_url)
+        entry_url = (base_url or "").strip()
+        base_url = self._normalize_base_url(entry_url)
         domain = urlparse(base_url).netloc
-        
-        # Note: Redis deduplication removed - using database-backed task queue instead
-        # Domain deduplication is now handled by the task queue status tracking
         
         logger.info(f"Starting crawl for domain: {domain}")
         start_time = time.time()
@@ -61,7 +61,37 @@ class CrawlerService:
         all_content = []
         failed_attempts = 0
         zero_page_reason = None
-        
+        crawled_urls: Set[str] = set()
+
+        http_result = await self._crawl_via_http(entry_url, base_url, domain, start_time)
+        pages_crawled = http_result["pages_crawled"]
+        all_content = http_result["content"]
+        crawled_urls = http_result["crawled_urls"]
+        if http_result.get("zero_page_reason"):
+            zero_page_reason = http_result["zero_page_reason"]
+
+        if pages_crawled > 0 and http_result.get("stop_playwright"):
+            duration = time.time() - start_time
+            logger.info(
+                f"HTTP-only crawl for {domain}: {pages_crawled} pages in {duration:.2f}s "
+                "(skipping Playwright)"
+            )
+            return {
+                "domain": domain,
+                "pages_crawled": pages_crawled,
+                "content": all_content,
+                "duration": duration,
+                "zero_page_reason": None,
+                "skipped": False,
+                "fetch_method": "http",
+            }
+
+        if pages_crawled > 0:
+            logger.info(
+                f"HTTP prefetch for {domain}: {pages_crawled} page(s); "
+                "continuing with Playwright for link discovery / gaps"
+            )
+
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=settings.HEADLESS_BROWSER,
@@ -84,10 +114,15 @@ class CrawlerService:
                 
                 try:
                     sitemap_urls = await self._parse_sitemap(page, base_url, start_time)
+                    if not sitemap_urls:
+                        sitemap_urls = await self._parse_sitemap_http(base_url, start_time)
                     if sitemap_urls:
                         logger.info(f"Found {len(sitemap_urls)} URLs in sitemap for {domain}")
                     
                     pages_to_crawl = self._build_prioritized_queue(base_url, sitemap_urls if sitemap_urls else [])
+                    pages_to_crawl = [
+                        link for link in pages_to_crawl if link.url not in crawled_urls
+                    ]
                     
                     while pages_to_crawl and pages_crawled < self.max_pages:
                         # Check domain crawl timeout
@@ -166,14 +201,108 @@ class CrawlerService:
                 f"crawl_timeout={settings.DOMAIN_CRAWL_TIMEOUT}s"
             )
         
+        fetch_method = "http+playwright" if http_result.get("pages_crawled") else "playwright"
         return {
             "domain": domain,
             "pages_crawled": pages_crawled,
             "content": all_content,
             "duration": duration,
             "zero_page_reason": zero_page_reason,
-            "skipped": False
+            "skipped": False,
+            "fetch_method": fetch_method,
         }
+
+    async def _crawl_via_http(
+        self,
+        entry_url: str,
+        base_url: str,
+        domain: str,
+        start_time: float,
+    ) -> Dict:
+        """Try fast HTTP GET on entry URL and high-priority contact paths."""
+        if not settings.HTTP_FETCH_ENABLED:
+            return {"pages_crawled": 0, "content": [], "crawled_urls": set(), "stop_playwright": False}
+
+        urls_to_try: List[str] = []
+        parsed_entry = urlparse(entry_url if "://" in entry_url else f"https://{entry_url}")
+        if parsed_entry.netloc and (parsed_entry.path or "").strip("/"):
+            urls_to_try.append(entry_url if "://" in entry_url else f"https://{entry_url}")
+
+        queue = self._build_prioritized_queue(base_url, [])
+        for link in queue:
+            if link.url not in urls_to_try:
+                urls_to_try.append(link.url)
+
+        content: List[Dict] = []
+        crawled_urls: Set[str] = set()
+        pages_crawled = 0
+        stop_playwright = False
+
+        for url in urls_to_try:
+            elapsed = time.time() - start_time
+            if elapsed > settings.DOMAIN_CRAWL_TIMEOUT:
+                break
+            if pages_crawled >= self.max_pages:
+                break
+            if url in crawled_urls:
+                continue
+
+            page_data = await fetch_page_http(url, timeout_sec=settings.HTTP_FETCH_TIMEOUT)
+            if not page_data:
+                continue
+
+            text = page_data.get("text", "")
+            html = page_data.get("html", "")
+            crawled_urls.add(url)
+            pages_crawled += 1
+            is_contact = self._is_contact_page(url)
+            content.append({
+                "url": url,
+                "content": text,
+                "html": html,
+                "type": "contact_page" if is_contact else "regular_page",
+                "priority": 10 if is_contact else 7,
+            })
+            logger.info(f"HTTP crawled [{pages_crawled}] {url}")
+
+            if is_contact and (
+                self._has_quick_contacts(text) or self._has_quick_contacts(html)
+            ):
+                logger.info(f"HTTP found contacts on {url}, skipping Playwright for {domain}")
+                stop_playwright = True
+                break
+            if pages_crawled >= self.max_pages:
+                stop_playwright = True
+                break
+
+        return {
+            "pages_crawled": pages_crawled,
+            "content": content,
+            "crawled_urls": crawled_urls,
+            "stop_playwright": stop_playwright,
+            "zero_page_reason": "http_fetch_empty" if pages_crawled == 0 else None,
+        }
+
+    async def _parse_sitemap_http(self, base_url: str, domain_start_time: float) -> Optional[List[str]]:
+        """Fetch sitemap.xml via HTTP (no browser)."""
+        if not settings.HTTP_FETCH_ENABLED:
+            return None
+        if time.time() - domain_start_time > settings.DOMAIN_CRAWL_TIMEOUT:
+            return None
+        sitemap_url = urljoin(base_url, "/sitemap.xml")
+        try:
+            page_data = await fetch_page_http(sitemap_url, timeout_sec=min(6.0, settings.HTTP_FETCH_TIMEOUT))
+            if not page_data:
+                return None
+            urls = re.findall(r"<loc>(.*?)</loc>", page_data.get("html", ""))
+            filtered = [
+                u for u in urls
+                if not any(u.endswith(ext) for ext in [".jpg", ".png", ".pdf", ".zip", ".mp4"])
+            ]
+            return filtered[:100]
+        except Exception as exc:
+            logger.debug(f"HTTP sitemap failed for {base_url}: {exc}")
+            return None
     
     def _build_prioritized_queue(self, base_url: str, sitemap_urls: List[str] = None) -> List[PrioritizedLink]:
         """Build prioritized queue of pages to crawl"""
@@ -462,11 +591,17 @@ class CrawlerService:
                         full_url = urljoin(base_url, path)
                         
                         try:
-                            page_data = await self._crawl_page_with_rotation(
-                                page,
-                                full_url,
-                                timeout_budget_ms=remaining_timeout_ms
-                            )
+                            page_data = None
+                            if settings.HTTP_FETCH_ENABLED:
+                                page_data = await fetch_page_http(
+                                    full_url, timeout_sec=settings.HTTP_FETCH_TIMEOUT
+                                )
+                            if not page_data:
+                                page_data = await self._crawl_page_with_rotation(
+                                    page,
+                                    full_url,
+                                    timeout_budget_ms=remaining_timeout_ms
+                                )
                             if page_data:
                                 all_content.append({
                                     "url": full_url,

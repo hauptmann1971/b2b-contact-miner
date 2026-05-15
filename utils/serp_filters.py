@@ -35,6 +35,13 @@ DEFAULT_BLOCKED_HOST_SUFFIXES = (
     "gemini.google.com",
     "grokipedia.com",
     "gabler-banklexikon.de",
+    "investopedia.com",
+    "britannica.com",
+    "medium.com",
+    "forbes.com",
+    "crunchbase.com",
+    "bloomberg.com",
+    "techcrunch.com",
 )
 
 

@@ -86,14 +86,13 @@ def apply_suggestions(env_file: str, dry_run: bool, suggestions: list) -> int:
     print(f"\nAdding {len(added)} host(s). Total denylist size: {len(current)}")
     if dry_run:
         print("(dry-run, .env not modified)")
-        return EXIT_OK
-
-    _write_env_hosts(env_file, current)
-    print(f"Updated {env_file}")
+    else:
+        _write_env_hosts(env_file, current)
+        print(f"Updated {env_file}")
     return EXIT_OK
 
 
-def main() -> int:
+def main() -> None:
     parser = argparse.ArgumentParser(description="Apply SERP denylist suggestions to .env")
     parser.add_argument(
         "--env-file",
@@ -109,8 +108,8 @@ def main() -> int:
     finally:
         db.close()
 
-    return apply_suggestions(args.env_file, args.dry_run, suggestions)
+    raise SystemExit(apply_suggestions(args.env_file, args.dry_run, suggestions))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

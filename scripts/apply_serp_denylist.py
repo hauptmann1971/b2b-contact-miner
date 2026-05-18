@@ -54,7 +54,45 @@ def _write_env_hosts(path: str, hosts: list[str]) -> None:
         f.write(content)
 
 
-def main() -> int:
+EXIT_OK = 0
+EXIT_NO_SUGGESTIONS = 1
+EXIT_ALREADY_PRESENT = 2
+
+
+def apply_suggestions(env_file: str, dry_run: bool, suggestions: list) -> int:
+    if not suggestions:
+        print("No new hosts to add.")
+        return EXIT_NO_SUGGESTIONS
+
+    current = list(DEFAULT_BLOCKED_HOST_SUFFIXES)
+    if os.path.isfile(env_file):
+        env_hosts = _parse_env_hosts(open(env_file, encoding="utf-8").read())
+        for h in env_hosts:
+            if h not in current:
+                current.append(h)
+
+    added: list[str] = []
+    for host, _cnt, reason in suggestions:
+        h = host.lower().strip()
+        if h not in {c.lower() for c in current}:
+            current.append(h)
+            added.append(h)
+            print(f"  + {h}  # {reason}")
+
+    if not added:
+        print("Suggestions already present in denylist.")
+        return EXIT_ALREADY_PRESENT
+
+    print(f"\nAdding {len(added)} host(s). Total denylist size: {len(current)}")
+    if dry_run:
+        print("(dry-run, .env not modified)")
+    else:
+        _write_env_hosts(env_file, current)
+        print(f"Updated {env_file}")
+    return EXIT_OK
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="Apply SERP denylist suggestions to .env")
     parser.add_argument(
         "--env-file",
@@ -70,38 +108,8 @@ def main() -> int:
     finally:
         db.close()
 
-    if not suggestions:
-        print("No new hosts to add.")
-        return 0
-
-    current = list(DEFAULT_BLOCKED_HOST_SUFFIXES)
-    if os.path.isfile(args.env_file):
-        env_hosts = _parse_env_hosts(open(args.env_file, encoding="utf-8").read())
-        for h in env_hosts:
-            if h not in current:
-                current.append(h)
-
-    added: list[str] = []
-    for host, cnt, reason in suggestions:
-        h = host.lower().strip()
-        if h not in {c.lower() for c in current}:
-            current.append(h)
-            added.append(h)
-            print(f"  + {h}  # {reason}")
-
-    if not added:
-        print("Suggestions already present in denylist.")
-        return 0
-
-    print(f"\nAdding {len(added)} host(s). Total denylist size: {len(current)}")
-    if args.dry_run:
-        print("(dry-run, .env not modified)")
-        return 0
-
-    _write_env_hosts(args.env_file, current)
-    print(f"Updated {args.env_file}")
-    return 0
+    raise SystemExit(apply_suggestions(args.env_file, args.dry_run, suggestions))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

@@ -13,6 +13,29 @@ from utils.serp_constants import DEFAULT_BLOCKED_HOST_SUFFIXES
 from utils.serp_filters import normalize_host
 
 
+def _blocked_suffixes() -> Set[str]:
+    try:
+        return set(settings.SERP_BLOCKED_HOST_SUFFIXES or DEFAULT_BLOCKED_HOST_SUFFIXES)
+    except Exception:
+        return set(DEFAULT_BLOCKED_HOST_SUFFIXES)
+
+
+def _contact_hosts(db: Session) -> Set[str]:
+    hosts: Set[str] = set()
+    for (domain,) in db.query(DomainContact.domain).distinct().all():
+        host = normalize_host(f"https://{domain}/" if domain and "://" not in domain else domain)
+        if host:
+            hosts.add(host)
+    return hosts
+
+
+def _is_already_blocked(host: str, blocked: Set[str]) -> bool:
+    return any(
+        host == suffix.lower().lstrip(".") or host.endswith("." + suffix.lower().lstrip("."))
+        for suffix in blocked
+    )
+
+
 def suggest_blocked_hosts(
     db: Session,
     *,
@@ -39,25 +62,13 @@ def suggest_blocked_hosts(
         .all()
     )
 
-    contact_hosts: Set[str] = set()
-    for (domain,) in db.query(DomainContact.domain).distinct().all():
-        host = normalize_host(f"https://{domain}/" if domain and "://" not in domain else domain)
-        if host:
-            contact_hosts.add(host)
-
-    try:
-        blocked = set(settings.SERP_BLOCKED_HOST_SUFFIXES or DEFAULT_BLOCKED_HOST_SUFFIXES)
-    except Exception:
-        blocked = set(DEFAULT_BLOCKED_HOST_SUFFIXES)
+    contact_hosts = _contact_hosts(db)
+    blocked = _blocked_suffixes()
     suggestions: List[Tuple[str, int, str]] = []
 
     for domain, cnt in zero_rows:
         host = normalize_host(f"https://{domain}/" if domain and "://" not in domain else domain)
-        if not host:
-            continue
-        if host in contact_hosts:
-            continue
-        if any(host == s.lower().lstrip(".") or host.endswith("." + s.lower().lstrip(".")) for s in blocked):
+        if not host or host in contact_hosts or _is_already_blocked(host, blocked):
             continue
         suggestions.append((host, int(cnt), f"{cnt} zero-page crawls in {days}d, no domain_contacts"))
         if len(suggestions) >= limit:

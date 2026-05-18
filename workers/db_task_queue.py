@@ -202,7 +202,7 @@ class DatabaseTaskQueue:
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
-                break
+                raise
             except Exception as e:
                 logger.error(f"Worker {worker_id} error: {e}")
                 await asyncio.sleep(1)

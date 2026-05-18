@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import base64
-import re
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def decode_raw_data(raw: Any) -> str:
@@ -28,6 +27,43 @@ def _local(tag: str) -> str:
     return tag.split("}")[-1] if "}" in tag else tag
 
 
+def _collect_passage_texts(child: ET.Element) -> List[str]:
+    tag = _local(child.tag)
+    if tag == "passage" and child.text:
+        return [child.text.strip()]
+    if tag != "passages":
+        return []
+    return [
+        passage.text.strip()
+        for passage in child
+        if _local(passage.tag) == "passage" and passage.text
+    ]
+
+
+def _parse_doc_element(elem: ET.Element) -> Optional[Dict[str, str]]:
+    url = ""
+    title = ""
+    snippets: List[str] = []
+    for child in elem:
+        tag = _local(child.tag)
+        if tag == "url" and child.text:
+            url = child.text.strip()
+        elif tag == "title" and child.text:
+            title = child.text.strip()
+        elif tag in ("passage", "passages"):
+            snippets.extend(_collect_passage_texts(child))
+        elif tag == "headline" and child.text and not title:
+            title = child.text.strip()
+
+    if not url:
+        return None
+
+    snippet = " ".join(snippets[:3]).strip()
+    if len(snippet) > 500:
+        snippet = snippet[:500] + "…"
+    return {"url": url, "title": title, "snippet": snippet}
+
+
 def parse_web_search_xml(xml_text: str, max_results: int = 10) -> List[Dict]:
     """
     Extract url, title, snippet from Yandex Search XML.
@@ -47,36 +83,11 @@ def parse_web_search_xml(xml_text: str, max_results: int = 10) -> List[Dict]:
     for elem in root.iter():
         if _local(elem.tag) != "doc":
             continue
-        url = ""
-        title = ""
-        snippets: List[str] = []
-        for child in elem:
-            tag = _local(child.tag)
-            if tag == "url" and child.text:
-                url = child.text.strip()
-            elif tag == "title" and child.text:
-                title = child.text.strip()
-            elif tag == "passage" and child.text:
-                snippets.append(child.text.strip())
-            elif tag == "passages":
-                for passage in child:
-                    if _local(passage.tag) == "passage" and passage.text:
-                        snippets.append(passage.text.strip())
-            elif tag == "headline" and child.text and not title:
-                title = child.text.strip()
-
-        if not url:
+        parsed = _parse_doc_element(elem)
+        if not parsed:
             continue
         position += 1
-        snippet = " ".join(snippets[:3]).strip()
-        if len(snippet) > 500:
-            snippet = snippet[:500] + "…"
-        results.append({
-            "url": url,
-            "title": title,
-            "snippet": snippet,
-            "position": position,
-        })
+        results.append({**parsed, "position": position})
         if len(results) >= max_results:
             break
 

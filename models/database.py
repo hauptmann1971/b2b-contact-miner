@@ -6,6 +6,10 @@ import enum
 
 Base = declarative_base()
 
+_COMMENT_ID = "Unique identifier"
+_COMMENT_CREATED_AT = "Record creation timestamp"
+_COMMENT_UPDATED_AT = "Last update timestamp"
+
 # MySQL connection with pool settings
 engine = create_engine(
     settings.DATABASE_URL,
@@ -38,14 +42,14 @@ class Keyword(Base):
     """Search keywords to process (e.g., 'IT companies Moscow')"""
     __tablename__ = "keywords"
     
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
+    id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
     keyword = Column(String(500), unique=True, nullable=False, index=True, comment="Search query text")
     language = Column(String(10), nullable=False, default="ru", comment="Language code (ru, en, etc.)")
     country = Column(String(5), nullable=False, default="RU", comment="Country code (RU, US, etc.)")
     is_processed = Column(Boolean, default=False, comment="True if keyword has been fully processed")
     last_crawled_at = Column(DateTime, nullable=True, comment="Timestamp of last crawl operation")
-    created_at = Column(DateTime, default=datetime.utcnow, comment="Record creation timestamp")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="Last update timestamp")
+    created_at = Column(DateTime, default=datetime.utcnow, comment=_COMMENT_CREATED_AT)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment=_COMMENT_UPDATED_AT)
     
     searches = relationship("SearchResult", back_populates="keyword")
 
@@ -54,7 +58,7 @@ class SearchResult(Base):
     """SERP search results for a keyword"""
     __tablename__ = "search_results"
     
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
+    id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
     keyword_id = Column(Integer, ForeignKey("keywords.id"), nullable=False, comment="Foreign key to keywords table")
     url = Column(String(768), nullable=False, index=True, comment="Website URL from search results")  # Reduced for MySQL index limit (768 * 4 bytes = 3072)
     title = Column(String(1000), comment="Page title from SERP")
@@ -63,7 +67,7 @@ class SearchResult(Base):
     is_processed = Column(Boolean, default=False, comment="True if URL has been crawled")
     raw_search_query = Column(Text, comment="Raw query sent to SERP provider")
     raw_search_response = Column(JSON, comment="Raw JSON response from SERP provider")
-    created_at = Column(DateTime, default=datetime.utcnow, comment="Record creation timestamp")
+    created_at = Column(DateTime, default=datetime.utcnow, comment=_COMMENT_CREATED_AT)
     
     keyword = relationship("Keyword", back_populates="searches")
     domain_contacts = relationship("DomainContact", back_populates="search_result")
@@ -77,7 +81,7 @@ class DomainContact(Base):
     """Aggregated contact information for a domain"""
     __tablename__ = "domain_contacts"
     
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
+    id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=False, comment="Foreign key to search_results table")
     domain = Column(String(500), nullable=False, index=True, comment="Domain name (e.g., example.com)")
     tags = Column(JSON, default=list, comment="Tags/categories extracted from website")
@@ -86,8 +90,8 @@ class DomainContact(Base):
     extraction_method = Column(String(50), comment="Method used: llm, regex, html_parse")
     confidence_score = Column(Integer, default=0, comment="Confidence score 0-100")
     is_verified = Column(Boolean, default=False, comment="True if contacts have been verified")
-    created_at = Column(DateTime, default=datetime.utcnow, comment="Record creation timestamp")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="Last update timestamp")
+    created_at = Column(DateTime, default=datetime.utcnow, comment=_COMMENT_CREATED_AT)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment=_COMMENT_UPDATED_AT)
     
     search_result = relationship("SearchResult", back_populates="domain_contacts")
     contacts = relationship("Contact", back_populates="domain_contact", cascade="all, delete-orphan")
@@ -101,13 +105,13 @@ class Contact(Base):
     """Normalized individual contact records for efficient search"""
     __tablename__ = "contacts"
     
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
+    id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
     domain_contact_id = Column(Integer, ForeignKey("domain_contacts.id"), nullable=False, comment="Foreign key to domain_contacts table")
     contact_type = Column(Enum(ContactType), nullable=False, comment="Type: email, telegram, linkedin, phone, x, facebook, instagram, youtube")
     value = Column(String(500), nullable=False, index=True, comment="Contact value (email address, phone number, etc.)")
     is_verified = Column(Boolean, default=False, comment="True if contact has been verified")
     verification_date = Column(DateTime, nullable=True, comment="Date of last verification")
-    created_at = Column(DateTime, default=datetime.utcnow, comment="Record creation timestamp")
+    created_at = Column(DateTime, default=datetime.utcnow, comment=_COMMENT_CREATED_AT)
     
     domain_contact = relationship("DomainContact", back_populates="contacts")
     
@@ -122,7 +126,7 @@ class CrawlLog(Base):
     """Logs of website crawling operations"""
     __tablename__ = "crawl_logs"
     
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
+    id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
     domain = Column(String(500), nullable=False, index=True, comment="Domain that was crawled")
     url = Column(String(2000), comment="Specific URL crawled")
     status_code = Column(Integer, comment="HTTP status code (200, 404, 500, etc.)")
@@ -139,7 +143,7 @@ class PipelineState(Base):
     """Checkpoint for monitoring pipeline progress"""
     __tablename__ = "pipeline_state"
     
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="Unique identifier")
+    id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
     # Same run_id is shared across multiple rows (run header + per-keyword checkpoints); must not be UNIQUE.
     run_id = Column(String(100), nullable=False, index=True, comment="Pipeline run identifier (shared across checkpoints)")
     keyword_id = Column(Integer, ForeignKey("keywords.id"), comment="Current keyword being processed")
@@ -148,7 +152,7 @@ class PipelineState(Base):
     websites_processed = Column(Integer, default=0, comment="Number of websites processed")
     contacts_found = Column(Integer, default=0, comment="Total contacts found in this run")
     started_at = Column(DateTime, default=datetime.utcnow, comment="Pipeline start timestamp")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="Last update timestamp")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment=_COMMENT_UPDATED_AT)
     error_message = Column(Text, comment="Error message if pipeline failed")
     
     keyword = relationship("Keyword")

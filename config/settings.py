@@ -55,6 +55,7 @@ class Settings(BaseSettings):
 
     # HTTP-first crawl (before Playwright)
     HTTP_FETCH_ENABLED: bool = True
+    HTTP_FETCH_VERIFY_SSL: bool = True  # Set false only for sites with broken TLS certs
     HTTP_FETCH_TIMEOUT: float = 8.0
     HTTP_FETCH_MIN_TEXT_CHARS: int = 200
 

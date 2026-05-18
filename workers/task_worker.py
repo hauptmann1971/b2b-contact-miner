@@ -55,4 +55,4 @@ class AsyncTaskQueue:
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
-                break
+                raise

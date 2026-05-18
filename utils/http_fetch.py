@@ -51,7 +51,7 @@ async def fetch_page_http(url: str, timeout_sec: Optional[float] = None) -> Opti
     try:
         async with httpx.AsyncClient(
             follow_redirects=True,
-            verify=False,
+            verify=settings.HTTP_FETCH_VERIFY_SSL,
             timeout=httpx.Timeout(timeout),
         ) as client:
             response = await client.get(url, headers=headers)

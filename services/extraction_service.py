@@ -462,7 +462,7 @@ If no contacts found, return:
         # Remove URL fragments and tracking params for dedup
         url = re.sub(r'#.*$', '', url)
         url = re.sub(r'(\?|&)(utm_[^=&]+|fbclid|gclid)=[^&]*', '', url, flags=re.IGNORECASE)
-        url = re.sub(r'\?&', '?', url).rstrip('?&')
+        url = url.replace("?&", "?").rstrip("?&")
         return url
 
     def _normalize_telegram_link(self, link: str) -> str:

@@ -15,7 +15,7 @@ class KeywordResponse(BaseModel):
     language: str
     country: str
     is_processed: bool
-    last_crawled_at: Optional[datetime]
+    last_crawled_at: Optional[datetime] = None
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
@@ -48,4 +48,4 @@ class CrawlStats(BaseModel):
     processed_keywords: int
     total_domains: int
     contacts_found: int
-    last_run: Optional[datetime]
+    last_run: Optional[datetime] = None

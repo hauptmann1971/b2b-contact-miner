@@ -34,7 +34,6 @@ task_queue: DatabaseTaskQueue = None
 
 @app.on_event("startup")
 async def startup_event():
-    global redis_client, task_queue
     logger.info("Health check API started")
 
 

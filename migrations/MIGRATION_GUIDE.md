@@ -38,8 +38,8 @@ Replace AsyncTaskQueue with DatabaseTaskQueue in your main pipeline:
 
 ```python
 # OLD CODE:
-from workers.task_worker import AsyncTaskQueue
-task_queue = AsyncTaskQueue(max_concurrent=20)
+from workers.db_task_queue import DatabaseTaskQueue
+task_queue = DatabaseTaskQueue(max_concurrent=20)
 
 # NEW CODE:
 from workers.db_task_queue import DatabaseTaskQueue

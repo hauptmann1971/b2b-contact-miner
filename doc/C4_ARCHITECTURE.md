@@ -89,7 +89,7 @@ graph TB
         KeywordLoader[Keyword Loader<br/>pending keywords from DB] --> StateManager[State Manager<br/>utils/state_manager.py → pipeline_state]
         StateManager --> SearchOrchestrator[Search Orchestrator]
         
-        SearchOrchestrator --> SERPGetter[SERP Getter<br/>getters/serp_getter.py]
+        SearchOrchestrator --> SERPGetter[SERP Service<br/>services/serp_service.py]
         SERPGetter --> SearchResultProcessor[Search Result Processor<br/>services/crawler_service.py]
         
         SearchResultProcessor --> DomainCrawler[Domain Crawler<br/>Playwright; DomainRateLimiter per domain;<br/>delay between pages; regex e.g. sitemap loc, quick contact hints]
@@ -264,36 +264,16 @@ graph LR
         KeywordService[keyword_service.py<br/>Keyword management]
     end
     
-    subgraph "getters/ - Data Retrieval"
-        SERPGetter[serp_getter.py<br/>SERP API client]
-        YandexGetter[yandex_getter.py<br/>Yandex specific]
-        GoogleGetter[google_getter.py<br/>Google specific]
-    end
-    
-    subgraph "checkers/ - Validation"
-        KeywordChecker[keyword_checker.py<br/>Validate keywords]
-        ContactChecker[contact_checker.py<br/>Validate contacts]
-    end
+    SerpService[serp_service.py<br/>SERP API client]
     
     subgraph "utils/ - Utilities"
         StateManager[state_manager.py<br/>Progress tracking]
-        Logger[logger.py<br/>Logging setup]
-        Helpers[helpers.py<br/>Common utilities]
     end
     
-    CrawlerService --> SERPGetter
-    CrawlerService --> YandexGetter
-    CrawlerService --> GoogleGetter
-    
+    CrawlerService --> SerpService
     ExtractionService --> CrawlerService
     ExportService --> ExtractionService
-    
-    KeywordService --> KeywordChecker
-    CrawlerService --> ContactChecker
-    
     CrawlerService --> StateManager
-    ExtractionService --> Logger
-    ExportService --> Logger
     
     style CrawlerService fill:#1168bd,color:#fff
     style ExtractionService fill:#1168bd,color:#fff
@@ -305,14 +285,8 @@ graph LR
 2. **extraction_service.py** - Regex/HTML-based contact extraction from content first; selective LLM-based extraction for obfuscated pages when enabled; LLM response handling
 3. **export_service.py** - DB export: flat CSV, per-domain CSV, Excel, and `get_export_summary`
 4. **keyword_service.py** - Keywords in DB: add, pending selection, `is_processed`, summaries
-5. **serp_getter.py** - SERP client for search results (as labeled on the diagram)
-6. **yandex_getter.py** - Yandex-oriented getter (as labeled on the diagram)
-7. **google_getter.py** - Google-oriented getter (as labeled on the diagram)
-8. **keyword_checker.py** - Keyword validation rules (as labeled on the diagram)
-9. **contact_checker.py** - Contact validation rules (as labeled on the diagram)
-10. **state_manager.py** - Pipeline run progress in `pipeline_state` (`StateManager`)
-11. **logger.py** - Logging setup used by services (as labeled on the diagram)
-12. **helpers.py** - Shared helper utilities (as labeled on the diagram)
+5. **serp_service.py** - SERP client (DuckDuckGo, SerpAPI, Yandex Search API)
+6. **state_manager.py** - Pipeline run progress in `pipeline_state` (`StateManager`)
 
 *Note:* Arrows show dependency direction (A → B means A uses B). Blue node fill marks emphasized `services/` modules. Diagram file names are the intended code-level split; compare with `services/`, `getters/`, `checkers/`, and `utils/` in the repo—some labels may not match the current tree.
 

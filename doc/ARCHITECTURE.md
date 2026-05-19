@@ -24,7 +24,7 @@ b2b-contact-miner/
 │   ├── translation_service.py# Перевод ключевых слов
 │   └── export_service.py     # Экспорт результатов
 ├── workers/
-│   └── task_worker.py        # Асинхронная очередь задач
+│   └── db_task_queue.py      # Database-backed async task queue
 ├── utils/
 │   ├── robots_checker.py     # Проверка robots.txt
 │   └── state_manager.py      # Управление состоянием пайплайна

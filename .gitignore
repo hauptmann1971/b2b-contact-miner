@@ -67,6 +67,7 @@ sonar.env.txt
 
 # SonarQube/SonarCloud
 .scannerwork/
+doc/sonarcloud_reports/
 
 # Exported data
 *.csv

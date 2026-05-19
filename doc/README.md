@@ -20,7 +20,7 @@ Central index for `doc/`. Prefer **Active** docs for production and onboarding. 
 | [C4_ARCHITECTURE.md](C4_ARCHITECTURE.md) | C4 diagrams (compare with real `services/` paths) |
 | [HOW_IT_WORKS.md](HOW_IT_WORKS.md) | Plain-language pipeline walkthrough |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Tables and fields |
-| [DB_TASK_QUEUE_SETUP.md](DB_TASK_QUEUE_SETUP.md) | MySQL `task_queue`, workers |
+| [TASK_QUEUE.md](TASK_QUEUE.md) | MySQL `task_queue` — current behavior |
 
 ### Deploy & runtime
 
@@ -51,7 +51,7 @@ Central index for `doc/`. Prefer **Active** docs for production and onboarding. 
 
 | Doc | Content |
 |-----|---------|
-| [KEYWORDS_GUIDE.md](KEYWORDS_GUIDE.md) | Keywords in DB — note: auto-translation in guide is **not** wired in `add_keyword` yet |
+| [KEYWORDS_GUIDE.md](KEYWORDS_GUIDE.md) | Keywords in DB (manual per row; optional `generate_translations`) |
 | [CONTACT_EXTRACTION_METHODS.md](CONTACT_EXTRACTION_METHODS.md) | Regex / LLM extraction |
 | [HOW_CONTENT_GOES_TO_LLM.md](HOW_CONTENT_GOES_TO_LLM.md) | LLM payload |
 | [RUN_TESTS_GUIDE.md](RUN_TESTS_GUIDE.md) | `pytest tests/` |
@@ -73,7 +73,8 @@ May reference **Redis task queue**, **self-hosted SonarQube**, **GigaChat**, or 
 |-----|----------------|
 | [SONARQUBE_SETUP.md](SONARQUBE_SETUP.md) | Self-hosted SonarQube → use SonarCloud |
 | `sonarqube-docker-compose.yml` | Same |
-| [REDIS_SETUP.md](REDIS_SETUP.md) | Queue moved to MySQL `task_queue` |
+| [REDIS_SETUP.md](REDIS_SETUP.md) | Optional Redis container; app queue is MySQL |
+| [DB_TASK_QUEUE_SETUP.md](DB_TASK_QUEUE_SETUP.md) | One-time migration checklist (done) |
 | [ASYNC_PIPELINE_MIGRATION.md](ASYNC_PIPELINE_MIGRATION.md) | Migration notes (done) |
 | [MIGRATION_COMPLETE.md](MIGRATION_COMPLETE.md) | Migration completion note |
 | [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) | Old implementation log |
@@ -108,6 +109,7 @@ May reference **Redis task queue**, **self-hosted SonarQube**, **GigaChat**, or 
 ## Quick links
 
 - [How it works →](HOW_IT_WORKS.md)
+- [Task queue →](TASK_QUEUE.md)
 - [Deploy →](DEPLOYMENT_GUIDE.md)
 - [Yandex SERP →](YANDEX_SEARCH_SETUP.md)
 - [Scripts & ops →](../scripts/README.md)

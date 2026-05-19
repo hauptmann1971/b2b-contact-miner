@@ -1,5 +1,8 @@
 # 🏗️ Архитектура B2B Contact Miner
 
+> **Устаревшие фрагменты:** часть ниже описывает синхронный `main._process_keyword` и DuckDuckGo по умолчанию.  
+> Актуальный поток: [HOW_IT_WORKS.md](HOW_IT_WORKS.md), [TASK_QUEUE.md](TASK_QUEUE.md).
+
 ## Обзор системы
 
 **B2B Contact Miner** - это асинхронный пайплайн для автоматического поиска и извлечения контактной информации (email, Telegram, LinkedIn) с корпоративных сайтов.
@@ -18,7 +21,7 @@ b2b-contact-miner/
 │   └── schemas.py            # Pydantic схемы данных
 ├── services/
 │   ├── keyword_service.py    # Управление ключевыми словами
-│   ├── serp_service.py       # Поисковые API (DuckDuckGo, SerpAPI)
+│   ├── serp_service.py       # SERP (duckduckgo / serpapi / yandex)
 │   ├── crawler_service.py    # Краулинг сайтов (Playwright)
 │   ├── extraction_service.py # Извлечение контактов (Regex + LLM)
 │   ├── translation_service.py# Перевод ключевых слов

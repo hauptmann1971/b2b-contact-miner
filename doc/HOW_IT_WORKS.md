@@ -1,384 +1,143 @@
-# 🚀 Быстрый старт - Как работает проект
+# How the project works
 
-## Краткое описание
+> **Updated for current code** (DB task queue, configurable SERP). See also [TASK_QUEUE.md](TASK_QUEUE.md), [scripts/README.md](../scripts/README.md).
 
-**B2B Contact Miner** автоматически ищет контакты компаний в интернете:
+## Summary
 
-1. Берет ключевые слова из базы (например, "финтех стартап")
-2. Ищет сайты через DuckDuckGo
-3. Краулит найденные сайты
-4. Извлекает email, Telegram, LinkedIn
-5. Сохраняет результаты в MySQL
+**B2B Contact Miner** finds B2B contacts by:
+
+1. Loading pending rows from `keywords`
+2. Enqueueing `search_keyword` tasks → SERP (`SERP_API_PROVIDER`: `yandex` / `duckduckgo` / `serpapi`)
+3. Crawling selected URLs (`crawl_domain`)
+4. Extracting contacts (`extract_contacts`) — regex / JSON-LD first, LLM fallback
+5. Storing results in MySQL
 
 ---
 
-## 📁 Структура проекта (просто)
+## Project layout
 
 ```
-main.py                  ← Запуск пайплайна
-│
-├── services/            ← Основная логика
-│   ├── keyword_service.py      → Управление ключами
-│   ├── serp_service.py         → Поиск сайтов
-│   ├── crawler_service.py      → Краулинг страниц
-│   └── extraction_service.py   → Извлечение контактов
-│
-├── models/              ← База данных
-│   └── database.py             → Таблицы MySQL
-│
-├── workers/             ← Параллельная обработка
-│   └── db_task_queue.py        → workers on MySQL task_queue
-│
-└── utils/               ← Утилиты
-    ├── robots_checker.py       → Проверка robots.txt
-    └── state_manager.py        → Прогресс пайплайна
+main.py                     # Pipeline orchestrator
+web_server.py               # Flask UI
+workers/db_task_queue.py    # Async workers + MySQL task_queue
+services/
+  serp_service.py           # Search
+  crawler_service.py          # HTTP-first + Playwright
+  extraction_service.py       # Contacts + optional LLM
+models/database.py          # ORM tables
 ```
 
 ---
 
-## 🔄 Как работает (по шагам)
+## Step 1: Add keywords
 
-### Шаг 1: Добавление ключевых слов
+**Web UI:** `web_server.py` → form on `/` (one `language` + `country` per row).
+
+**CLI:**
+
 ```bash
-python add_keywords.py
+python getters/add_keywords.py
+python getters/add_keywords.py show
 ```
-Добавляет ключи в таблицу `keywords`:
-- "финтех стартап" (ru, RU)
-- "fintech startup" (en, US)
-- и т.д.
+
+Each row: `keyword`, `language`, `country`. The DB has `UNIQUE(keyword)` on text only — do not rely on duplicate text with different locales unless you change the schema.
 
 ---
 
-### Шаг 2: Запуск пайплайна
+## Step 2: Run pipeline
+
 ```bash
 python main.py
+# or on server:
+./scripts/run_pipeline_background.sh
 ```
 
-**Что происходит внутри:**
+**What `run_pipeline()` does:**
 
-```
-1. main.py загружает настройки из .env
-2. Подключается к MySQL
-3. Запускает 20 worker'ов для параллельной работы
-4. Берет первое ключевое слово: "финтех стартап"
-```
+1. Preflight (SERP / LLM settings)
+2. `DatabaseTaskQueue(max_concurrent=settings.MAX_CONCURRENT_DOMAINS)` — default **12** workers
+3. For each pending keyword → `add_task(task_type='search_keyword', ...)`
+4. Workers process the queue until keywords are done or timeout (`_wait_for_completion`, default 2h)
+5. Optional nightly quality gate (`NIGHTLY_FAIL_ON_QUALITY_GATE`)
+
+Legacy sync path `_process_keyword()` in `main.py` is **not** used here (only `getters/run_specific_keyword.py`).
 
 ---
 
-### Шаг 3: Поиск сайтов (SERP Service)
+## Step 3: Search (`search_keyword`)
 
-```python
-# В main.py вызывается:
-search_results = serp.search(
-    query="финтех стартап",
-    country="RU",
-    language="ru",
-    num_results=10
-)
+Worker calls `SerpService.search()` with:
 
-# DuckDuckGo возвращает:
-[
-    {"url": "https://mkechinov.ru/fintech-startups.html", ...},
-    {"url": "https://rb.ru/fintech/organizations/", ...},
-    {"url": "https://vitvet.com/articles/finteh_startapy/", ...},
-    ...
-]
-```
+- `build_search_query(keyword, language, country)` — adds locale hints (`контакты email`, etc.)
+- `num_results=settings.SEARCH_RESULTS_PER_KEYWORD` — default **5**
+- Results filtered (`SERP_BLOCKED_HOST_SUFFIXES`), deduped, top URLs picked for crawl
 
-Сохраняется в таблицу `search_results`.
+SERP rows saved in `search_results` inside this task (not a separate `save_results` worker).
 
 ---
 
-### Шаг 4: Краулинг каждого сайта (Crawler Service)
+## Step 4: Crawl (`crawl_domain`)
 
-Для каждого из 5 сайтов:
-
-```python
-# 1. Проверка robots.txt
-if not robots_checker.can_fetch(url):
-    skip()  # Пропускаем если запрещено
-
-# 2. Запуск браузера Playwright
-browser = chromium.launch(headless=True)
-
-# 3. Загрузка sitemap.xml (если есть)
-sitemap_urls = load_sitemap(domain)
-
-# 4. Приоритизация страниц
-high_priority = ["/contact", "/contacts", "/about"]
-medium_priority = ["/team", "/leadership"]
-low_priority = [остальные страницы]
-
-# 5. Краулинг по приоритету
-for page in prioritized_pages[:10]:  # Максимум 10 страниц
-    content = browser.goto(page, timeout=30000)
-    
-    # Если нашли контакты на /contact → ранняя остановка!
-    if has_contacts(content):
-        break  # Не краулим остальные страницы
-```
-
-**Пример из реального запуска:**
-- **mkechinov.ru**: 1 страница за 42 сек → нашел email ✓
-- **rb.ru**: 1 страница за 8 сек → нашел email ✓
-- **wikipedia.org**: 10 страниц за 31 сек → нет email ✗
-- **vitvet.com**: TIMEOUT на каждой странице (сайт блокирует ботов)
+- Optional skip: snippet already has email/Telegram (`SERP_SNIPPET_SKIP_CRAWL`)
+- HTTP fetch first (`HTTP_FETCH_ENABLED`), then Playwright if needed
+- `MAX_PAGES_PER_DOMAIN` (default 3), wall-clock cap `DOMAIN_CRAWL_TIMEOUT`
+- Denylist / scoring: `utils/serp_filters.py`
 
 ---
 
-### Шаг 5: Извлечение контактов (Extraction Service)
+## Step 5: Extract (`extract_contacts`)
 
-```python
-# Получаем HTML контент всех страниц
-content_list = [
-    {"url": ".../contact", "content": "<html>...", "type": "contact_page"},
-    {"url": ".../about", "content": "<html>...", "type": "regular_page"}
-]
-
-# Применяем regex паттерны
-emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', content)
-telegram = re.findall(r't\.me/([a-zA-Z0-9_]+)', content)
-linkedin = re.findall(r'linkedin\.com/(in|company)/([a-zA-Z0-9_-]+)', content)
-
-# Результат:
-ContactInfo(
-    emails=["info@mkechinov.ru"],
-    telegram=[],
-    linkedin=[]
-)
-```
-
-#### Если email обфусцирован:
-```python
-# Обнаружена обфускация: info[at]company[dot]ru
-if has_obfuscation(content):
-    # Используем YandexGPT для парсинга
-    llm_result = yandexgpt.extract_contacts(content)
-    emails = llm_result.emails
-```
-
-#### Верификация email:
-```python
-# Проверяем MX записи домена
-is_valid = verify_email_mx("info@mkechinov.ru")
-# Возвращает True если MX записи существуют
-```
+- Regex, JSON-LD, mailto links
+- LLM if enabled: `USE_YANDEXGPT` / `USE_DEEPSEEK` / `USE_OPENAI` (see `extraction_service.py`)
+- MX check on emails; optional skip empty domains (`SAVE_EMPTY_DOMAIN_CONTACTS`)
 
 ---
 
-### Шаг 6: Сохранение в базу данных
+## Step 6: View results
 
-```sql
--- 1. DomainContact (информация о домене)
-INSERT INTO domain_contacts (
-    search_result_id, 
-    domain, 
-    confidence_score,
-    extraction_method
-) VALUES (1, 'mkechinov.ru', 40, 'regex');
-
--- 2. Contact (сам контакт)
-INSERT INTO contacts (
-    domain_contact_id,
-    contact_type,
-    value,
-    is_verified
-) VALUES (1, 'email', 'info@mkechinov.ru', true);
-```
+- Web: `/contacts`, `/keywords`
+- CLI: `python getters/view_results.py`, `python getters/check_db_raw.py`
+- Export: Flask route or `scripts/export_flat.py` → `contacts_export.csv` (gitignored)
 
 ---
 
-### Шаг 7: Переход к следующему сайту/ключу
-
-После обработки всех 5 сайтов ключевого слова:
-```python
-# Отмечаем ключ как обработанный
-keyword.is_processed = True
-db.commit()
-
-# Берем следующий ключ
-next_keyword = get_next_pending_keyword()
-```
-
----
-
-## 🎯 Реальный пример результатов
-
-После запуска с ключом "финтех стартап":
-
-```
-✅ Найдено контактов: 2
-
-1. mkechinov.ru
-   Email: info@mkechinov.ru
-   Статус: MX верифицирован ✓
-   Время: 42 секунды
-
-2. rb.ru
-   Email: team@rb.ru
-   Статус: MX верифицирован ✓
-   Время: 8 секунд
-
-❌ Не найдено: wikipedia.org (нет бизнес-контактов)
-⏸️ Пропущено: generation-startup.ru (robots.txt blocked)
-⏳ Зависло: vitvet.com (таймауты на всех страницах)
-```
-
----
-
-## ⚙️ Настройки (файл .env)
+## Key `.env` settings
 
 ```bash
-# Сколько страниц краулить на одном сайте
-MAX_PAGES_PER_DOMAIN=10
-
-# Таймаут на одну страницу (секунды)
-REQUEST_TIMEOUT=30
-
-# Сколько сайтов обрабатывать на одно ключевое слово
-# (в коде: search_results[:5])
-
-# Какой поисковик использовать
-SERP_API_PROVIDER=duckduckgo
-
-# LLM для сложных случаев
+SERP_API_PROVIDER=yandex          # prod CIS; use duckduckgo for local dev
+MAX_CONCURRENT_DOMAINS=12
+SEARCH_RESULTS_PER_KEYWORD=5
+MAX_PAGES_PER_DOMAIN=3
+HTTP_FETCH_ENABLED=true
 USE_YANDEXGPT=true
 YANDEX_IAM_TOKEN=...
-YANDEX_FOLDER_ID=b1gqdgpgp7i6fctfrh44
+YANDEX_FOLDER_ID=...
 ```
+
+Full template: `.env.example`. Production SERP: [YANDEX_SEARCH_SETUP.md](YANDEX_SEARCH_SETUP.md).
 
 ---
 
-## 🛡️ Защита от ошибок
-
-### 1. Retry при сбоях
-```python
-# Если поиск не удался → повторить до 3 раз
-@retry(stop=stop_after_attempt(3))
-def search(...):
-    ...
-```
-
-### 2. Изоляция ошибок
-```python
-try:
-    crawl_website(url)
-except Exception as e:
-    logger.error(f"Failed: {e}")
-    continue  # Переходим к следующему сайту
-```
-
-### 3. Graceful shutdown
-```bash
-# Нажатие Ctrl+C
-^C
-→ Сохраняем прогресс
-→ Закрываем браузеры
-→ Выходим корректно
-```
-
----
-
-## 📊 Мониторинг прогресса
-
-В логах видно:
-```
-Processing keyword [1/10]: финтех стартап
-  [1/5] Processing: https://mkechinov.ru/...
-  ✓ Completed [1/5]: mkechinov.ru (1 email found)
-  
-  [2/5] Processing: https://rb.ru/...
-  ✓ Completed [2/5]: rb.ru (1 email found)
-  
-📊 Progress: 2/5 websites processed
-   Total contacts: 2
-```
-
----
-
-## 🔍 Просмотр результатов
+## Monitoring
 
 ```bash
-# Посмотреть все найденные контакты
-python view_results.py
-
-# Или напрямую в БД
-python check_db_raw.py
+python scripts/monitor_workers.py
+python scripts/recover_stale_tasks.py
+curl http://127.0.0.1:8000/health   # when api_server / healthcheck is running
 ```
 
 ---
 
-## 💡 Ключевые особенности
+## Performance (rough)
 
-### ✅ Умный краулинг
-- Сначала проверяет `/contact`, `/contacts`
-- Если нашел → останавливается (экономия времени)
-- Максимум 10 страниц на сайт
-
-### ✅ Приоритизация
-1. Высокий: contact, contacts, about, team
-2. Средний: impressum, legal, privacy
-3. Низкий: остальные страницы из sitemap
-
-### ✅ Дедупликация
-- Redis (если доступен) или in-memory
-- Не краулит один домен дважды
-
-### ✅ Верификация
-- Проверка формата email
-- MX records проверка
-- Confidence score (уверенность в контакте)
+- Parallelism: up to `MAX_CONCURRENT_DOMAINS` tasks at once (search/crawl/extract mix)
+- One keyword: depends on SERP size, crawl timeouts, LLM — often minutes, not seconds
+- Pipeline run: bounded by `_wait_for_completion` timeout and keyword count
 
 ---
 
-## 🚨 Типичные проблемы
+## Further reading
 
-### 1. Сайт блокирует ботов
-```
-Error: Page.goto: Timeout 30000ms exceeded
-```
-**Решение:** Сайт пропускается, переходим к следующему
-
-### 2. robots.txt запрещает
-```
-Blocked by robots.txt
-```
-**Решение:** Сайт пропускается автоматически
-
-### 3. Нет контактов на сайте
-```
-Extracted: 0 emails, 0 Telegram, 0 LinkedIn
-```
-**Решение:** Переходим к следующему сайту
-
-### 4. Потеря соединения с БД
-```
-Lost connection to MySQL server
-```
-**Решение:** Автоматическое переподключение (pool_pre_ping)
-
----
-
-## 📈 Производительность
-
-**Один ключевой слово (~5 сайтов):**
-- Быстрые сайты: 2-3 минуты
-- Медленные сайты: 5-10 минут
-- С таймаутами: 15+ минут
-
-**Параллелизм:**
-- 20 worker'ов могут обрабатывать разные задачи одновременно
-- Но сайты одного ключа обрабатываются последовательно
-
----
-
-## 🎓 Итог
-
-**B2B Contact Miner делает:**
-1. 🔍 Ищет сайты по ключевым словам
-2. 🕷️ Краулит найденные сайты умно (с приоритетами)
-3. 📧 Извлекает контакты (email, Telegram, LinkedIn)
-4. ✅ Верифицирует email через MX
-5. 💾 Сохраняет всё в MySQL
-
-**Всё полностью автоматизировано!** 🚀
+- [TASK_QUEUE.md](TASK_QUEUE.md) — queue types and dependencies
+- [KEYWORDS_GUIDE.md](KEYWORDS_GUIDE.md) — keywords (incl. translation API not wired on add)
+- [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md) — short architecture index

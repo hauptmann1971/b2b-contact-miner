@@ -2,6 +2,9 @@
 
 Эта папка содержит скрипты для проверки работоспособности компонентов системы.
 
+> **Unit/integration tests:** `pytest tests/`.  
+> Smoke и KPI: ниже. Production ops: [scripts/README.md](../scripts/README.md).
+
 ## 📋 Доступные чекеры
 
 ### Docker и инфраструктура

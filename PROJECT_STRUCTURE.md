@@ -1,5 +1,8 @@
 # B2B Contact Miner - Project Structure
 
+> **Up-to-date indexes:** [doc/README.md](doc/README.md) (active vs historical docs), [scripts/README.md](scripts/README.md) (ops scripts).  
+> This file describes layout at a high level; some paths may lag behind the repo.
+
 ## 📁 Directory Layout
 
 ```

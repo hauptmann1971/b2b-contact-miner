@@ -1,90 +1,119 @@
 # Scripts Directory
 
-Utility scripts for the B2B Contact Miner project.
-
-## How to Run
-
-All scripts should be run from the **project root** directory:
+Utility and operations scripts for B2B Contact Miner. Run from **project root**:
 
 ```bash
-cd c:\Users\romanov\PycharmProjects\b2b-contact-miner
-python scripts/script_name.py
+cd /opt/b2b-contact-miner   # or your clone path
+./venv/bin/python scripts/script_name.py
 ```
 
-Or use relative imports if running from scripts directory:
+Scripts set `PYTHONPATH` via `os.chdir(ROOT)` + `sys.path.insert` (there is no shared `_path_helper`).
+
+---
+
+## Production runtime (not in `scripts/`)
+
+| Entry point | Role |
+|-------------|------|
+| `main.py` | Contact mining pipeline → MySQL `task_queue` → `workers/db_task_queue.py` |
+| `web_server.py` | Flask UI (port 5000) |
+| `api_server.py` | FastAPI export API (optional) |
+| `monitoring/healthcheck.py` | Health / queue metrics (mounted from `api_server` or standalone) |
+
+---
+
+## Production ops (manual)
+
+Use on the server when debugging queue, SERP, or keywords. Safe to re-run; read script `--help` where available.
+
+### Pipeline & queue
+
+| Script | Purpose |
+|--------|---------|
+| `run_pipeline_background.sh` | Start `main.py` detached with absolute log path |
+| `monitor_workers.py` | Print `task_queue` stats |
+| `recover_stale_tasks.py` | Unlock / reset stale running tasks |
+| `unblock_orphan_queue_tasks.py` | Unblock tasks whose parent search failed |
+| `retry_failed_search_tasks.py` | Re-queue failed `search_keyword` tasks |
+| `check_stuck_keywords.py` | Keywords vs pending/running tasks |
+| `reconcile_keyword_is_processed.py` | Fix `keywords.is_processed` vs queue state |
+| `reset_keywords_for_rerun.py` | Mark keywords pending for another run |
+
+### SERP denylist
+
+| Script | Purpose |
+|--------|---------|
+| `apply_serp_denylist.py` | Merge DB suggestions into `.env` |
+| `suggest_serp_denylist.py` | Print denylist candidates (no write) |
+| `seed_serp_denylist_env.py` | Emit `SERP_BLOCKED_HOST_SUFFIXES` JSON for `.env` |
+| `pipeline_quality_report.py` | 24h crawl/queue KPIs |
+
+### Metrics & DB hygiene
+
+| Script | Purpose |
+|--------|---------|
+| `run_metrics_window.py` | DB metrics between `--start` / `--end` timestamps |
+| `fix_mysql_autoincrement_ids.py` | Repair AUTO_INCREMENT on core tables |
+| `check_contacts.py` | Contact table summary |
+| `check_new_records.py` | Recent row counts |
+| `debug_recent_contacts.py` | Inspect latest contacts |
+
+### Yandex credentials
+
+| Script | Purpose |
+|--------|---------|
+| `refresh_yandex_token.py` | Refresh IAM in `.env` |
+| `exchange_oauth_token.py` | OAuth → IAM exchange |
+| `test_yandex_token.py` | Quick IAM check |
+| `test_yandex_search.py` | Yandex Search API smoke test |
+
+Prefer **`getters/`** for first-time IAM setup: `getters/get_iam_from_oauth.py`, `getters/update_iam_token.py` (see [getters/README.md](../getters/README.md)).
+
+---
+
+## Scheduled on server (cron)
+
+**`weekly_maintenance.sh`** — typical cron (Sunday 03:00):
 
 ```bash
-cd scripts
-python script_name.py
+0 3 * * 0 root /opt/b2b-contact-miner/scripts/weekly_maintenance.sh >> /opt/b2b-contact-miner/logs/weekly_maintenance.log 2>&1
 ```
 
-## Available Scripts
+Runs: `pipeline_quality_report.py` → `apply_serp_denylist.py` → `unblock_orphan_queue_tasks.py` → `fix_mysql_autoincrement_ids.py`.
 
-### Data Export
-- `export_flat.py` - Export contacts to flat CSV format
-- `export_for_llm_test.py` - Export data for LLM testing
+**`scheduler.py`** — optional daily pipeline trigger (used by `deploy/start_all.sh` on dev machines).
 
-### Database Checks
-- `check_contacts.py` - Analyze contacts in database
-- `check_new_records.py` - Check for new records
-- `recover_stale_tasks.py` - Recover stuck tasks
+---
 
-### Monitoring
-- `monitor_workers.py` - Monitor worker processes and task queue
+## Deploy & CI helpers
 
-### Automation
-- `run_pipeline_background.sh` - Start `main.py` in the background with an **absolute** log path (default: `$PROJECT_DIR/logs/pipeline_background.log`). No `disown`; works from any directory.
-  ```bash
-  # From repo (Linux / server)
-  chmod +x scripts/run_pipeline_background.sh
-  PROJECT_DIR=/opt/b2b-contact-miner ./scripts/run_pipeline_background.sh
+| Script | Purpose |
+|--------|---------|
+| `deploy_server.ps1` | SSH deploy from Windows |
+| `validate_setup.py` | Local dependency / DB / optional Redis check |
+| `download_sonar_report.py` | Pull SonarCloud issues → `doc/sonarcloud_reports/` (gitignored) |
 
-  # Custom log file
-  PIPELINE_LOG=/var/log/b2b-pipeline.log PROJECT_DIR=/opt/b2b-contact-miner ./scripts/run_pipeline_background.sh
-  ```
-- `register_weekly_smoke_task.ps1` - Register a Windows Task Scheduler job for weekly smoke KPI checks
-  ```powershell
-  # Default: every Sunday at 03:00
-  powershell -ExecutionPolicy Bypass -File scripts/register_weekly_smoke_task.ps1
+GitHub Actions deploy: `.github/workflows/deploy.yml`. Server helper: `deploy/deploy.sh`.
 
-  # Custom thresholds and time
-  powershell -ExecutionPolicy Bypass -File scripts/register_weekly_smoke_task.ps1 `
-    -Day MON -Time 02:30 -Limit 15 `
-    -MinWithContactsRate 25 -MaxZeroPageRate 45 -MaxFailures 0
-  ```
+---
 
-- `deploy_server.ps1` - Deploy code to Linux server over SSH, optionally upload local `.env`, install deps, run migrations, and restart supervisor service
-  ```powershell
-  # Basic deploy to your server + copy .env
-  powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
-    -ServerHost 85.198.86.237 -User root -AppDir /opt/b2b-contact-miner -Branch main
+## Development & one-off
 
-  # Deploy without dependency reinstall
-  powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
-    -ServerHost 85.198.86.237 -User root -InstallDeps:$false
+| Script | Purpose |
+|--------|---------|
+| `test_async_pipeline.py` | Queue integration smoke |
+| `export_flat.py` | Flat CSV export → `contacts_export.csv` (gitignored) |
+| `export_for_llm_test.py` | Sample pages for LLM experiments |
+| `rewrite_ru_commit_messages.py` | One-time `git filter-branch` helper (legacy commit messages) |
 
-  # Deploy code only (without .env upload)
-  powershell -ExecutionPolicy Bypass -File scripts/deploy_server.ps1 `
-    -ServerHost 85.198.86.237 -User root -CopyEnv:$false
-  ```
+**Smoke / component tests:** [checkers/README.md](../checkers/README.md) (`smoke_pipeline_quality.py`, `run_weekly_smoke.py`, …).
 
-### Testing & Validation
-- `validate_setup.py` - Validate project setup and dependencies
-- `test_async_pipeline.py` - Test async pipeline functionality
-- `test_yandex_token.py` - Test Yandex token authentication
+**Keywords & tokens:** [getters/README.md](../getters/README.md).
 
-### Token Management
-- `exchange_oauth_token.py` - Exchange OAuth tokens
-- `refresh_yandex_token.py` - Refresh Yandex IAM tokens
+---
 
-### Utilities
-- `download_sonar_report.py` - Download SonarCloud analysis reports
-- `scheduler.py` - Task scheduler
+## Related docs
 
-## Note
-
-All scripts automatically add the project root to Python path, so you can import modules like:
-```python
-from models.database import SessionLocal
-from services.extraction_service import ExtractionService
-```
+- Index: [doc/README.md](../doc/README.md) (active vs historical)
+- Deploy: [doc/DEPLOYMENT_GUIDE.md](../doc/DEPLOYMENT_GUIDE.md), [doc/YANDEX_SEARCH_SETUP.md](../doc/YANDEX_SEARCH_SETUP.md)
+- Queue: [doc/DB_TASK_QUEUE_SETUP.md](../doc/DB_TASK_QUEUE_SETUP.md)

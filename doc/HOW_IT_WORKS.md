@@ -27,7 +27,7 @@ main.py                  ← Запуск пайплайна
 │   └── database.py             → Таблицы MySQL
 │
 ├── workers/             ← Параллельная обработка
-│   └── task_worker.py          → 20 worker'ов
+│   └── db_task_queue.py        → workers on MySQL task_queue
 │
 └── utils/               ← Утилиты
     ├── robots_checker.py       → Проверка robots.txt

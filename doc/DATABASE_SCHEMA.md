@@ -172,7 +172,7 @@ Persistent task queue for reliable asynchronous processing.
 |--------|------|-------------|
 | `id` | INT | Unique task identifier |
 | `task_name` | VARCHAR(255) | Human-readable task name |
-| `task_type` | VARCHAR(100) | Task type: search_keyword, crawl_domain, extract_contacts, save_results |
+| `task_type` | VARCHAR(100) | Task type: search_keyword, crawl_domain, extract_contacts (save_results in code comments only; no handler) |
 | `payload` | TEXT | JSON serialized task data/parameters |
 | `status` | VARCHAR(50) | Status: pending, running, completed, failed, retrying |
 | `priority` | INT | Priority level (higher number = higher priority) |
@@ -204,8 +204,8 @@ Persistent task queue for reliable asynchronous processing.
 **Task Types:**
 - `search_keyword` - Search for keyword in SERP
 - `crawl_domain` - Crawl website domain
-- `extract_contacts` - Extract contacts using LLM
-- `save_results` - Save results to database
+- `extract_contacts` - Extract contacts (regex / JSON-LD / optional LLM)
+- SERP rows are saved inside `search_keyword`, not a separate queue task
 
 **Status Values:**
 - `pending` - Waiting to be processed

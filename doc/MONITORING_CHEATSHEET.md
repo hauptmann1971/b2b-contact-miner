@@ -4,7 +4,7 @@
 
 ### 1. Проверить состояние системы
 ```bash
-python monitor_workers.py
+python scripts/monitor_workers.py
 ```
 
 **Что смотреть:**
@@ -17,7 +17,7 @@ python monitor_workers.py
 
 ### 2. Восстановить зависшие задачи
 ```bash
-python recover_stale_tasks.py
+python scripts/recover_stale_tasks.py
 ```
 
 **Когда использовать:**
@@ -33,9 +33,9 @@ python main.py
 ```
 
 **Автоматически при старте:**
-- Проверяет и восстанавливает stale tasks
-- Запускает 20 workers
-- Обрабатывает все pending задачи
+- Восстанавливает stale tasks (`recover_stale_tasks` в `db_task_queue.start_workers`)
+- Запускает `MAX_CONCURRENT_DOMAINS` workers (default **12**, см. `.env`)
+- Обрабатывает задачи из MySQL `task_queue`
 
 ---
 
@@ -79,16 +79,16 @@ mysql -u b2b_user -p b2b_contact_miner -e "
 "
 
 # 2. Проверить состояние
-python monitor_workers.py
+python scripts/monitor_workers.py
 
 # 3. Если есть stale tasks → восстановить
-python recover_stale_tasks.py
+python scripts/recover_stale_tasks.py
 
 # 4. Запустить pipeline
 python main.py
 
 # 5. Мониторить прогресс
-python monitor_workers.py  # в отдельном терминале
+python scripts/monitor_workers.py  # в отдельном терминале
 ```
 
 ---
@@ -99,10 +99,10 @@ python monitor_workers.py  # в отдельном терминале
 # 1. Остановить pipeline (Ctrl+C)
 
 # 2. Проверить состояние
-python monitor_workers.py
+python scripts/monitor_workers.py
 
 # 3. Восстановить зависшие задачи
-python recover_stale_tasks.py
+python scripts/recover_stale_tasks.py
 
 # 4. Перезапустить
 python main.py
@@ -114,7 +114,7 @@ python main.py
 
 ```bash
 # 1. Посмотреть детали ошибок
-python monitor_workers.py
+python scripts/monitor_workers.py
 
 # 2. Детальный анализ через SQL
 mysql -u b2b_user -p b2b_contact_miner -e "
@@ -148,7 +148,7 @@ python main.py
 
 **Терминал 2 (каждые 30 секунд):**
 ```bash
-python monitor_workers.py
+python scripts/monitor_workers.py
 ```
 
 **Что смотреть:**
@@ -225,8 +225,8 @@ LIMIT 10;
 
 | Файл | Назначение |
 |------|------------|
-| `monitor_workers.py` | Полная диагностика системы |
-| `recover_stale_tasks.py` | Восстановление зависших задач |
+| `scripts/monitor_workers.py` | Полная диагностика системы |
+| `scripts/recover_stale_tasks.py` | Восстановление зависших задач |
 | `check_contacts.py` | Проверка контактов в БД |
 | `export_flat.py` | Экспорт результатов в CSV |
 | `MONITORING_GUIDE.md` | Подробная документация |

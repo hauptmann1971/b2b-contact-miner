@@ -12,7 +12,7 @@ graph TB
     
     System -->|Queries| SERP[SERP API<br/>Yandex/Google Search]
     System -->|Crawls| Websites[Target Websites]
-    System -->|Extracts with| LLM[LLM Service<br/>YandexGPT/GigaChat]
+    System -->|Extracts with| LLM[LLM Service<br/>YandexGPT / DeepSeek / OpenAI]
     System -->|Stores in| MySQL[(MySQL Database)]
     
     System -->|Monitored by| SonarCloud[SonarCloud<br/>Code Quality]
@@ -50,7 +50,7 @@ graph TB
     subgraph "External Services"
         SERP[SERP API Provider]
         Websites[Target Websites]
-        LLM[LLM Provider<br/>YandexGPT/GigaChat]
+        LLM[LLM Provider<br/>YandexGPT / DeepSeek / OpenAI]
         GitHub[GitHub Repository]
         SonarCloud[SonarCloud SaaS]
     end
@@ -95,7 +95,7 @@ graph TB
         SearchResultProcessor --> DomainCrawler[Domain Crawler<br/>Playwright; DomainRateLimiter per domain;<br/>delay between pages; regex e.g. sitemap loc, quick contact hints]
         DomainCrawler --> ContentExtractor[Content Extractor<br/>services/extraction_service.py<br/>regex first, LLM fallback]
         
-        ContentExtractor --> LLMCaller[LLM Caller<br/>calls YandexGPT/GigaChat]
+        ContentExtractor --> LLMCaller[LLM Caller<br/>YandexGPT / DeepSeek / OpenAI]
         LLMCaller --> ContactParser[Contact Parser<br/>parses LLM response]
         
         ContactParser --> ResultSaver[Result Saver<br/>services/export_service.py]
@@ -226,7 +226,7 @@ graph TB
         SearchTask[search_keyword<br/>Fetch SERP results]
         CrawlTask[crawl_domain<br/>Crawl website]
         ExtractTask[extract_contacts<br/>regex/HTML + LLM fallback]
-        SaveTask[save_results<br/>Save to DB]
+        SaveSERP[search_keyword saves<br/>search_results in DB]
     end
     
     TaskProducer --> SearchTask
@@ -246,7 +246,7 @@ graph TB
 
 **Key Components:**
 1. **Task Producer** - Creates tasks when pipeline runs (`add_task` inserts into `task_queue`)
-2. **Task Consumer** - Worker loop locks rows, runs `search_keyword` / `crawl_domain` / `extract_contacts` / `save_results` handlers, updates `task_queue` and related tables via SQLAlchemy sessions
+2. **Task Consumer** - Worker loop locks rows, runs `search_keyword` / `crawl_domain` / `extract_contacts` handlers; SERP rows saved inside `search_keyword` (no separate `save_results` handler)
 3. **Retry Handler** - Implements retry logic with exponential backoff
 4. **Task Scheduler** - Schedules recurring tasks
 5. **Monitor Worker** - Monitors queue health and stuck tasks
@@ -432,7 +432,7 @@ graph TB
 - Cons: Slower than message brokers, but acceptable for this use case
 
 ### 3. LLM Integration
-- **Multiple providers** (YandexGPT, GigaChat) for redundancy
+- **Multiple LLM providers** (YandexGPT, DeepSeek, OpenAI) via settings flags
 - **Fallback mechanism** if one provider fails
 
 ### 4. Web Framework
@@ -459,7 +459,7 @@ graph TB
 | **Backend API** | FastAPI | Monitoring and health check API |
 | **Database** | MySQL (`mysql:8.0` in `doc/docker-compose.yml`) | Primary data storage |
 | **Browser Automation** | Playwright | Website crawling |
-| **AI/ML** | YandexGPT, GigaChat | Contact extraction: regex/HTML first, LLM fallback when needed |
+| **AI/ML** | YandexGPT, DeepSeek, OpenAI | Contact extraction: regex/HTML first, LLM fallback when needed |
 | **Task Queue** | Custom DB-based | Async task processing |
 | **Web Server** | Nginx | Reverse proxy |
 | **Process Manager** | Supervisor (`apt install supervisor` on deploy) | Process supervision |

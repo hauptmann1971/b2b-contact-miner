@@ -196,14 +196,7 @@ response = requests.post(url, headers=headers, json={
     ]
 })
 
-# Для GigaChat
-response = gc.chat(
-    messages=[{"role": "user", "content": prompt}],
-    temperature=0.1,
-    max_tokens=300
-)
-
-# Для DeepSeek/OpenAI
+# Для DeepSeek / OpenAI (если включены в settings)
 response = client.chat.completions.create(
     model="deepseek-chat",
     messages=[{"role": "user", "content": prompt}],

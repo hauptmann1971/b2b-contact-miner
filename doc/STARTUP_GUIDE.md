@@ -1,5 +1,9 @@
 # 🚀 Запуск приложения - Полное руководство
 
+> **Актуальный минимум:** MySQL + `.env` + `python main.py` (очередь в БД, не Redis).  
+> См. [HOW_IT_WORKS.md](HOW_IT_WORKS.md), [TASK_QUEUE.md](TASK_QUEUE.md), [scripts/README.md](../scripts/README.md).  
+> Redis в этом документе — только опциональный Docker-сервис, **не** task queue.
+
 ## Скрипты запуска
 
 Проект включает скрипты для управления всеми компонентами системы:

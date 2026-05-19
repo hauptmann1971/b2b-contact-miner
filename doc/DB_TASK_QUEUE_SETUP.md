@@ -1,5 +1,7 @@
 # ✅ Миграция на Database Task Queue - Инструкция
 
+> **Historical.** Migration is complete. For current queue behavior see [TASK_QUEUE.md](TASK_QUEUE.md).
+
 ## Что было сделано
 
 Созданы все необходимые файлы для замены Redis на MySQL-based task queue:

@@ -460,7 +460,7 @@ csv_data = exporter.export_to_csv()
    - `MAX_SEARCH_RESULTS` - сколько URL искать на ключ
    - `MAX_PAGES_PER_DOMAIN` - сколько страниц краулить на сайт
 
-5. **Используйте Redis** для дедупликации доменов (ускоряет работу)
+5. **Дедупликация URL** — в пайплайне через `utils/serp_filters` и `task_queue` (MySQL), не через Redis
 
 ---
 

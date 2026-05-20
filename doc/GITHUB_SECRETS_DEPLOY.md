@@ -15,7 +15,6 @@ Add these required secrets:
 - `APP_DIR` (absolute path to project on server, example: `/opt/b2b-contact-miner`)
 
 - `DATABASE_URL`
-- `REDIS_URL`
 - `SERP_API_PROVIDER`
 - `SERPAPI_KEY`
 
@@ -51,6 +50,7 @@ Add these required secrets:
 
 ## Notes
 
+- Task queue uses **MySQL** (`task_queue` table), not Redis. `REDIS_URL` is not written by the deploy workflow.
 - Keep `.env` out of git.
 - Rotate `YANDEX_OAUTH_TOKEN` in GitHub Secrets if access is compromised.
 - If `APP_DIR` is not a git repo on server, initialize/clone it first.

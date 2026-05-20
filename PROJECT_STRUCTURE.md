@@ -1,182 +1,84 @@
-# B2B Contact Miner - Project Structure
+# B2B Contact Miner — Project Structure
 
-> **Up-to-date indexes:** [doc/README.md](doc/README.md) (active vs historical docs), [scripts/README.md](scripts/README.md) (ops scripts).  
-> This file describes layout at a high level; some paths may lag behind the repo.
+> **Doc index:** [doc/README.md](doc/README.md) (active vs historical).  
+> **Architecture:** [doc/HOW_IT_WORKS.md](doc/HOW_IT_WORKS.md), [doc/C4_ARCHITECTURE.md](doc/C4_ARCHITECTURE.md).
 
-## 📁 Directory Layout
+## Root layout
 
 ```
 b2b-contact-miner/
+├── main.py                 # Pipeline: enqueue search_keyword, run DB workers
+├── web_server.py           # Flask app (registers routes/)
+├── api_server.py           # Optional FastAPI export API + mounts /health
+├── requirements.txt
+├── .env.example
+├── sonar-project.properties
 │
-├── 📄 Core Files (Root)
-│   ├── main.py                 # Main pipeline entry point
-│   ├── web_server.py           # Flask web UI server
-│   ├── api_server.py           # FastAPI REST API server
-│   ├── requirements.txt        # Python dependencies
-│   ├── .env                    # Environment variables (not in git)
-│   ├── .env.example            # Template for .env
-│   └── sonar-project.properties # SonarCloud configuration
+├── config/
+│   └── settings.py         # Pydantic settings from .env
 │
-├── 📂 src/                     # Source code modules
-│   ├── checkers/               # Keyword and data validation
-│   ├── config/                 # Configuration management
-│   ├── getters/                # Data retrieval utilities
-│   ├── models/                 # Database models & schemas
-│   ├── services/               # Business logic services
-│   ├── utils/                  # Utility functions
-│   ├── workers/                # Background task workers
-│   └── monitoring/             # Health check & monitoring
+├── models/
+│   ├── database.py         # SQLAlchemy models (keywords, contacts, …)
+│   ├── task_queue.py       # task_queue table model
+│   └── schemas.py          # Pydantic DTOs
 │
-├── 📂 scripts/                 # Utility scripts
-│   ├── export_*.py            # Data export scripts
-│   ├── check_*.py             # Database check scripts
-│   ├── test_*.py              # Test scripts
-│   ├── monitor_workers.py     # Worker monitoring
-│   ├── validate_setup.py      # Setup validation
-│   └── download_sonar_report.py # SonarCloud report downloader
+├── services/
+│   ├── serp_service.py
+│   ├── crawler_service.py
+│   ├── extraction_service.py
+│   ├── keyword_service.py
+│   ├── export_service.py
+│   └── translation_service.py
 │
-├── 📂 deploy/                  # Deployment scripts
-│   ├── start_all.ps1          # Windows PowerShell startup
-│   ├── start_all.bat          # Windows Batch startup
-│   ├── start_all.sh           # Linux/Mac startup
-│   ├── auto_deploy.ps1        # Automated deployment
-│   └── deploy.sh              # Manual deployment helper
+├── workers/
+│   └── db_task_queue.py    # MySQL-backed async workers + handlers
 │
-├── 📂 tests/                   # Unit & integration tests
-├── 📂 migrations/              # Database migrations (Alembic)
-├── 📂 templates/               # HTML templates for Flask UI
-├── 📂 doc/                     # Documentation
-├── 📂 logs/                    # Application logs (not in git)
+├── routes/                 # Flask blueprints (registered by web_server.py)
+│   ├── user_routes.py
+│   ├── admin_routes.py
+│   ├── api_routes.py
+│   └── health_routes.py
 │
-└── 📂 .github/                 # GitHub Actions workflows
-    └── workflows/
-        └── sonarcloud.yml     # SonarCloud CI/CD analysis
+├── utils/                  # SERP filters, http_fetch, web_stats, state_manager, …
+├── monitoring/
+│   └── healthcheck.py      # FastAPI health / queue metrics (:8000)
+│
+├── templates/              # Jinja2 HTML
+├── static/                 # CSS / JS
+│
+├── scripts/                # Ops, cron, exports — see scripts/README.md
+├── getters/                # CLI: add keywords, view results — getters/README.md
+├── checkers/               # Smoke / manual checks — checkers/README.md
+├── tests/                  # pytest suite
+├── migrations/             # SQL + apply_*.py
+├── deploy/                 # nginx, start_all*, deploy.sh
+└── doc/                    # Documentation index
 ```
 
-## 🚀 Quick Start
+There is **no** `src/` package — modules live at repo root (PYTHONPATH = project root).
 
-### 1. Setup Environment
-```bash
-# Copy environment template
-cp .env.example .env
+## Runtime processes
 
-# Edit .env with your credentials
-nano .env  # or use any text editor
-```
+| Process | Entry | Notes |
+|---------|--------|--------|
+| Web UI | `python web_server.py` | `:5000`, localhost; Nginx on prod |
+| Pipeline | `python main.py` | Starts `DatabaseTaskQueue` workers in same process |
+| Health API | `uvicorn monitoring.healthcheck:app` or `api_server.py` | Optional `:8000` |
+| Scheduler | `python scripts/scheduler.py` | Daily `run_pipeline()` |
 
-### 2. Install Dependencies
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-venv\Scripts\activate     # Windows
+Task queue is **MySQL** (`task_queue` table), not Redis.
 
-pip install -r requirements.txt
-```
+## CI
 
-### 3. Initialize Database
-```bash
-python -c "from models.database import init_db; init_db()"
-```
+| Workflow | Purpose |
+|----------|---------|
+| `.github/workflows/tests.yml` | `pytest tests/` |
+| `.github/workflows/sonarcloud.yml` | SonarCloud analysis |
+| `.github/workflows/deploy.yml` | Manual SSH deploy (workflow_dispatch) |
 
-### 4. Run Application
+## Quick links
 
-**Option A: Use startup script (Recommended)**
-```bash
-# Windows
-.\deploy\start_all.ps1
-
-# Linux/Mac
-chmod +x deploy/start_all.sh
-./deploy/start_all.sh
-```
-
-**Option B: Manual start**
-```bash
-# Start monitoring service
-python monitoring/healthcheck.py
-
-# Start web UI
-python web_server.py
-
-# Run main pipeline
-python main.py
-```
-
-## 📊 Monitoring & UI
-
-- **Web UI**: http://localhost:5000
-- **Health Check API**: http://localhost:8000/health
-- **API Docs**: http://localhost:8000/docs
-
-## 🔧 Common Tasks
-
-### Run Specific Script
-```bash
-cd scripts
-python validate_setup.py       # Validate setup
-python check_contacts.py       # Check database contacts
-python export_flat.py          # Export to CSV
-python monitor_workers.py      # Monitor workers
-```
-
-### Deploy to Server
-```bash
-# Windows
-.\deploy\auto_deploy.ps1
-
-# Linux
-./deploy/deploy.sh
-```
-
-### Run Tests
-```bash
-pytest tests/
-```
-
-### Code Quality Check
-```bash
-# SonarCloud analysis runs automatically on push
-# View results at: https://sonarcloud.io/dashboard?id=hauptmann1971_b2b-contact-miner
-
-# Download report locally
-python scripts/download_sonar_report.py
-```
-
-## 📝 Key Files Explained
-
-| File | Purpose |
-|------|---------|
-| `main.py` | Main pipeline orchestrator - crawls, extracts, stores contacts |
-| `web_server.py` | Flask web interface for viewing results |
-| `api_server.py` | FastAPI REST API for programmatic access |
-| `scheduler.py` | Task scheduler for automated runs |
-| `.env` | Configuration (DB credentials, API keys) - **NEVER commit!** |
-
-## 🔐 Security Notes
-
-- `.env` file contains secrets - never commit to Git
-- Use environment variables for sensitive data
-- SonarCloud scans for vulnerabilities on every push
-- Network services bind to localhost by default
-
-## 📖 Documentation
-
-See `doc/` directory for detailed documentation:
-- `SONARCLOUD_SETUP.md` - SonarCloud integration guide
-- Other project-specific docs
-
-## 🤝 Contributing
-
-1. Create feature branch
-2. Make changes
-3. Run tests: `pytest tests/`
-4. Push to GitHub (SonarCloud will analyze)
-5. Create pull request
-
-## 📞 Support
-
-For issues or questions, check:
-1. Logs in `logs/` directory
-2. Documentation in `doc/`
-3. SonarCloud dashboard for code quality issues
+- [How it works](doc/HOW_IT_WORKS.md)
+- [Task queue](doc/TASK_QUEUE.md)
+- [Scripts](scripts/README.md)
+- [Run tests](doc/RUN_TESTS_GUIDE.md)

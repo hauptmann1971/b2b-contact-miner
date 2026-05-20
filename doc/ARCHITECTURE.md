@@ -1,7 +1,7 @@
 # 🏗️ Архитектура B2B Contact Miner
 
-> **Устаревшие фрагменты:** часть ниже описывает синхронный `main._process_keyword` и DuckDuckGo по умолчанию.  
-> Актуальный поток: [HOW_IT_WORKS.md](HOW_IT_WORKS.md), [TASK_QUEUE.md](TASK_QUEUE.md).
+> **Historical (archive).** Describes the old synchronous `main._process_keyword` flow.  
+> **Use instead:** [HOW_IT_WORKS.md](HOW_IT_WORKS.md), [TASK_QUEUE.md](TASK_QUEUE.md), [C4_ARCHITECTURE.md](C4_ARCHITECTURE.md), [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md).
 
 ## Обзор системы
 

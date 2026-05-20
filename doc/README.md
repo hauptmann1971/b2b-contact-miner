@@ -16,8 +16,7 @@ Central index for `doc/`. Prefer **Active** docs for production and onboarding. 
 | Doc | Content |
 |-----|---------|
 | [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md) | Short system overview |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Detailed module flow |
-| [C4_ARCHITECTURE.md](C4_ARCHITECTURE.md) | C4 diagrams (compare with real `services/` paths) |
+| [C4_ARCHITECTURE.md](C4_ARCHITECTURE.md) | C4 diagrams (Mermaid) |
 | [HOW_IT_WORKS.md](HOW_IT_WORKS.md) | Plain-language pipeline walkthrough |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Tables and fields |
 | [TASK_QUEUE.md](TASK_QUEUE.md) | MySQL `task_queue` — current behavior |
@@ -91,6 +90,7 @@ May reference **Redis task queue**, **self-hosted SonarQube**, **GigaChat**, or 
 | [QUICKSTART_VENV.md](QUICKSTART_VENV.md) | Overlaps STARTUP_GUIDE |
 | [STARTUP_SCRIPTS_GUIDE.md](STARTUP_SCRIPTS_GUIDE.md) | `deploy/start_all*` (dev convenience) |
 | [RELIABILITY_IMPROVEMENTS.md](RELIABILITY_IMPROVEMENTS.md) | Design notes (partially implemented) |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Old sync pipeline (RU); superseded by HOW_IT_WORKS |
 | [DIAGRAMS.md](DIAGRAMS.md) | Extra diagrams — verify against code |
 | [LLM_PROMPT_EXAMPLE.md](LLM_PROMPT_EXAMPLE.md) | Example only |
 | [FIX_YANDEXGPT_403.md](FIX_YANDEXGPT_403.md) | Troubleshooting snapshot |
@@ -113,4 +113,4 @@ May reference **Redis task queue**, **self-hosted SonarQube**, **GigaChat**, or 
 - [Deploy →](DEPLOYMENT_GUIDE.md)
 - [Yandex SERP →](YANDEX_SEARCH_SETUP.md)
 - [Scripts & ops →](../scripts/README.md)
-- [Run tests →](RUN_TESTS_GUIDE.md)
+- [Run tests →](RUN_TESTS_GUIDE.md) (CI: `.github/workflows/tests.yml`)

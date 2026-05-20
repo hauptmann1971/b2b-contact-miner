@@ -18,7 +18,6 @@ jobs:
           DEPLOY_REF: ${{ github.event.inputs.ref || 'main' }}
           APP_DIR: ${{ secrets.APP_DIR }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
           SERP_API_PROVIDER: ${{ secrets.SERP_API_PROVIDER }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -37,7 +36,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          envs: DEPLOY_REF,APP_DIR,DATABASE_URL,REDIS_URL,SERP_API_PROVIDER,SERPAPI_KEY,OPENAI_API_KEY,DEEPSEEK_API_KEY,USE_OPENAI,USE_DEEPSEEK,USE_YANDEXGPT,YANDEX_OAUTH_TOKEN,YANDEX_FOLDER_ID,LLM_DATA_API_TOKEN,ADMIN_USERNAME,ADMIN_PASSWORD,SECRET_KEY
+          envs: DEPLOY_REF,APP_DIR,DATABASE_URL,SERP_API_PROVIDER,SERPAPI_KEY,OPENAI_API_KEY,DEEPSEEK_API_KEY,USE_OPENAI,USE_DEEPSEEK,USE_YANDEXGPT,YANDEX_OAUTH_TOKEN,YANDEX_FOLDER_ID,LLM_DATA_API_TOKEN,ADMIN_USERNAME,ADMIN_PASSWORD,SECRET_KEY
           script_stop: true
           script: |
             set -e
@@ -56,7 +55,6 @@ jobs:
 
             cat > .env <<EOF
             DATABASE_URL=${DATABASE_URL}
-            REDIS_URL=${REDIS_URL}
             SERP_API_PROVIDER=${SERP_API_PROVIDER}
             SERPAPI_KEY=${SERPAPI_KEY}
             OPENAI_API_KEY=${OPENAI_API_KEY}

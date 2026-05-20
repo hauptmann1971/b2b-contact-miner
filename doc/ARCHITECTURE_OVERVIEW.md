@@ -3,8 +3,7 @@
 ## 📚 Documentation Index
 
 ### C4 Architecture Diagrams
-- **[C4_ARCHITECTURE.md](C4_ARCHITECTURE.md)** - Complete C4 diagrams (Context, Container, Component levels) with Mermaid syntax
-- **[C4_DIAGRAM.html](C4_DIAGRAM.html)** - Interactive HTML visualization (open in browser)
+- **[C4_ARCHITECTURE.md](C4_ARCHITECTURE.md)** - C4 diagrams (Context, Container, Component) with Mermaid — view in GitHub, Cursor, or any Mermaid preview
 
 ### Database Documentation
 - **[DATABASE_SCHEMA.md](DATABASE_SCHEMA.md)** - Complete database schema with field descriptions and relationships

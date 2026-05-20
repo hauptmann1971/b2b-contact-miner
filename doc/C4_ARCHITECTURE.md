@@ -1,31 +1,43 @@
 # C4 Architecture Diagrams - B2B Contact Miner
 
+> Aligned with current code (DB task queue, `run_pipeline()` orchestrator, Flask `routes/`).  
+> Narrative flow: [HOW_IT_WORKS.md](HOW_IT_WORKS.md), [TASK_QUEUE.md](TASK_QUEUE.md).
+
+---
+
 ## Level 1: System Context Diagram
 
 ```mermaid
 graph TB
-    User[User/Business Analyst] -->|Uses| WebUI[Web UI Dashboard]
-    User -->|Runs| Pipeline[Contact Mining Pipeline]
-    
-    WebUI -->|Displays| System[B2B Contact Miner System]
-    Pipeline -->|Executes| System
-    
-    System -->|Queries| SERP[SERP API<br/>Yandex/Google Search]
-    System -->|Crawls| Websites[Target Websites]
-    System -->|Extracts with| LLM[LLM Service<br/>YandexGPT / DeepSeek / OpenAI]
-    System -->|Stores in| MySQL[(MySQL Database)]
-    
-    System -->|Monitored by| SonarCloud[SonarCloud<br/>Code Quality]
-    System -->|Deployed on| Server[Production Server<br/>85.198.86.237]
-    
+    User[User / Business Analyst]
+    Admin[Administrator]
+
+    User -->|Browse, add keywords, export| WebUI[Web UI]
+    User -->|CLI: getters/, scripts/| OpsScripts[Ops Scripts]
+    Admin -->|SSH, deploy, cron| Server[Production Server]
+
+    subgraph System[B2B Contact Miner]
+        WebUI
+        OpsScripts
+        Pipeline[Pipeline Process<br/>main.py + DB workers]
+    end
+
+    Pipeline -->|SERP_API_PROVIDER| SERP[SERP APIs<br/>duckduckgo / serpapi / yandex]
+    Pipeline -->|HTTP + Playwright| Websites[Target Websites]
+    Pipeline -->|Optional fallback| LLM[LLM APIs<br/>YandexGPT / DeepSeek / OpenAI]
+
+    System -->|Reads / writes| MySQL[(MySQL)]
+    GitHub[GitHub] -->|push / PR| SonarCloud[SonarCloud]
+    Server --> System
+
     style System fill:#1168bd,color:#fff
-    style User fill:#08427b,color:#fff
+    style Pipeline fill:#1168bd,color:#fff
     style MySQL fill:#08427b,color:#fff
-    style LLM fill:#08427b,color:#fff
     style SERP fill:#08427b,color:#fff
+    style LLM fill:#08427b,color:#fff
 ```
 
-**Description:** The B2B Contact Miner system helps users discover business contacts by searching for keywords, crawling websites, and extracting contact information using AI.
+**Description:** Users manage keywords and view contacts via Flask. Mining runs as `python main.py` (or cron / `scripts/run_pipeline_background.sh`): one process enqueues `search_keyword` tasks and runs `DatabaseTaskQueue` workers that call SERP, crawl sites, and extract contacts into MySQL.
 
 ---
 
@@ -33,266 +45,264 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "Production Server (85.198.86.237)"
-        Nginx[Nginx Reverse Proxy<br/>Port 80] -->|Proxies to| FlaskApp[Flask Web Server<br/>web_server.py<br/>Port 5000]
-        Nginx -->|Health checks| FastAPI[FastAPI Monitoring<br/>api_server.py<br/>Port 8000]
-        
-        FlaskApp <-->|Reads/Writes| MySQL[(MySQL<br/>Remote)]
-        FastAPI <-->|Reads| MySQL
-        MainPipeline[Main Pipeline<br/>main.py] <-->|Reads/Writes| MySQL
-        MainPipeline -->|Task Queue| TaskQueue[Task Queue Worker<br/>workers/db_task_queue.py]
-        TaskQueue <-->|Reads/Writes| MySQL
-        
-        Supervisor[Supervisor<br/>Process Manager] -->|Manages| FlaskApp
-        Supervisor -->|Manages| FastAPI
+    subgraph Prod["Production server (85.198.86.237)"]
+        Nginx[Nginx :80<br/>deploy/nginx-b2b.conf]
+        Flask[Flask UI<br/>web_server.py :5000<br/>127.0.0.1]
+        PipelineProc[Pipeline process<br/>main.py]
+        Workers[DB task workers<br/>workers/db_task_queue.py<br/>same OS process as PipelineProc]
+        Supervisor[Supervisor<br/>program: b2b-web only]
+        Cron[Cron / manual<br/>run_pipeline_background.sh<br/>scripts/scheduler.py]
+
+        Nginx -->|proxy /, /health| Flask
+        Supervisor --> Flask
+        Cron -->|starts| PipelineProc
+        PipelineProc -->|starts N asyncio workers| Workers
+        Flask <-->|SQLAlchemy| MySQL[(MySQL<br/>e.g. remote host)]
+        Workers <-->|task_queue + domain data| MySQL
+        PipelineProc <-->|keywords, pipeline_state| MySQL
     end
-    
-    subgraph "External Services"
-        SERP[SERP API Provider]
-        Websites[Target Websites]
-        LLM[LLM Provider<br/>YandexGPT / DeepSeek / OpenAI]
-        GitHub[GitHub Repository]
-        SonarCloud[SonarCloud SaaS]
+
+    subgraph DevOptional["Optional (dev / local)"]
+        HealthAPI[monitoring/healthcheck.py :8000]
+        ExportAPI[api_server.py :8000<br/>mounts /health]
     end
-    
-    MainPipeline -->|Search queries| SERP
-    MainPipeline -->|Crawls| Websites
-    MainPipeline -->|Extracts contacts| LLM
-    
-    GitHub -->|CI/CD| SonarCloud
-    SonarCloud -->|Quality reports| GitHub
-    
-    style FlaskApp fill:#1168bd,color:#fff
-    style FastAPI fill:#1168bd,color:#fff
-    style MainPipeline fill:#1168bd,color:#fff
-    style TaskQueue fill:#1168bd,color:#fff
+
+    subgraph External["External"]
+        SERP[SERP provider]
+        Sites[Websites]
+        LLM[LLM providers]
+        GH[GitHub]
+        SC[SonarCloud]
+    end
+
+    Workers --> SERP
+    Workers --> Sites
+    Workers --> LLM
+    HealthAPI -.->|reads| MySQL
+    ExportAPI -.->|export CSV/Excel| MySQL
+    GH --> SC
+
+    style Flask fill:#1168bd,color:#fff
+    style PipelineProc fill:#1168bd,color:#fff
+    style Workers fill:#1168bd,color:#fff
     style MySQL fill:#08427b,color:#fff
     style Nginx fill:#438dd5,color:#fff
 ```
 
 **Containers:**
-1. **Nginx** - Reverse proxy for secure external access
-2. **Flask Web Server** - User interface for viewing results
-3. **FastAPI Monitoring** - Health check and metrics API
-4. **Main Pipeline** - Core contact mining orchestrator
-5. **Task Queue Worker** - Async task processing
-6. **MySQL** - Persistent data storage (Docker examples use image `mysql:8.0` in `doc/docker-compose.yml`; production host version is not pinned in this repo)
-7. **Database-backed Task Queue** - Persistent async processing in MySQL
+
+| Container | Role |
+|-----------|------|
+| **Nginx** | Public HTTP; proxies to Flask only (no `:8000` in prod nginx config) |
+| **Flask UI** | Keywords, contacts, admin actions, `/health` (DB ping) |
+| **Pipeline process** | `ContactMiningPipeline.run_pipeline()` — preflight, enqueue searches, wait for queue |
+| **DB task workers** | In-process asyncio pool (`MAX_CONCURRENT_DOMAINS`, default 12); handlers call services |
+| **MySQL** | `keywords`, `search_results`, `domain_contacts`, `contacts`, `task_queue`, `pipeline_state`, `crawl_logs`, … |
+| **Health / export API** | Optional localhost; `api_server.py` proxies `/metrics/pipeline` from Flask when monitoring is up |
+
+Legacy sync path `_process_keyword()` in `main.py` is **not** used by `run_pipeline()` (only `getters/run_specific_keyword.py`).
 
 ---
 
-## Level 3: Component Diagram - Main Pipeline
+## Level 3: Component Diagram — Pipeline orchestrator (`main.py`)
+
+```mermaid
+flowchart TB
+    subgraph Run["ContactMiningPipeline.run_pipeline()"]
+        Init[initialize]
+        Preflight[preflight: SERP + LLM settings]
+        StartQ[start_workers<br/>DatabaseTaskQueue]
+        LoadKW[KeywordService.get_pending_keywords]
+        CreateRun[StateManager.create_run]
+        Enqueue[add_task × N<br/>task_type=search_keyword]
+        Wait[_wait_for_completion<br/>poll queue + quality gate]
+        Shutdown[shutdown: stop_workers]
+    end
+
+    Init --> Preflight --> StartQ
+    StartQ --> LoadKW --> CreateRun --> Enqueue --> Wait --> Shutdown
+
+    Enqueue --> TQ[(task_queue)]
+    Wait --> TQ
+    LoadKW --> KW[(keywords)]
+    CreateRun --> PS[(pipeline_state)]
+
+    StartQ -.->|sets global ref| HC[monitoring/healthcheck.task_queue]
+
+    style Enqueue fill:#1168bd,color:#fff
+    style StartQ fill:#1168bd,color:#fff
+```
+
+**Orchestrator responsibilities:** load pending keywords, create run id, enqueue **only** `search_keyword` tasks, monitor completion (default 2h timeout). All SERP/crawl/extract work happens in queue handlers (next diagram).
+
+---
+
+## Level 3: Component Diagram — Task queue (`workers/db_task_queue.py`)
+
+```mermaid
+flowchart TB
+    subgraph Queue["DatabaseTaskQueue"]
+        Add[add_task]
+        Worker[_worker loop<br/>lock row → _execute_task]
+        Retry[_handle_task_failure / retry]
+        Recover[recover_stale_tasks]
+    end
+
+    TQ[(task_queue)]
+
+    Add --> TQ
+    Worker <-->|SELECT … FOR UPDATE| TQ
+    Retry --> TQ
+    Recover --> TQ
+
+    subgraph HSearch["_handle_search_task"]
+        Serp[SerpService.search]
+        Filters[utils/serp_filters<br/>filter + pick_urls_for_crawl]
+        SaveSERP[SerpService.save_results → search_results]
+        EnqCrawl[add_task crawl_domain]
+        EnqExtract[add_task extract_contacts<br/>snippet fast-path]
+    end
+
+    subgraph HCrawl["_handle_crawl_task"]
+        Crawl[CrawlerService.crawl_domain<br/>HTTP fetch + Playwright]
+        Pack[utils/crawl_payload pack]
+        EnqExt2[add_task extract_contacts]
+    end
+
+    subgraph HExtract["_handle_extract_task"]
+        Ext[ExtractionService.extract_contacts<br/>regex / JSON-LD / LLM]
+        Persist[ORM: domain_contacts, contacts, crawl_logs]
+    end
+
+    Worker --> HSearch
+    Worker --> HCrawl
+    Worker --> HExtract
+
+    HSearch --> Serp --> Filters --> SaveSERP --> EnqCrawl
+    SaveSERP --> EnqExtract
+    HCrawl --> Crawl --> Pack --> EnqExt2
+    HExtract --> Ext --> Persist
+
+    Serp --> SERPExt[SERP API]
+    Crawl --> WebExt[Websites]
+    Ext --> LLMExt[LLM APIs]
+
+    Persist --> DB[(MySQL tables)]
+    SaveSERP --> DB
+    EnqCrawl --> TQ
+    EnqExtract --> TQ
+    EnqExt2 --> TQ
+
+    MainEnqueue[main.py enqueue<br/>search_keyword only] --> Add
+
+    style Worker fill:#1168bd,color:#fff
+    style HSearch fill:#1168bd,color:#fff
+    style HCrawl fill:#1168bd,color:#fff
+    style HExtract fill:#1168bd,color:#fff
+```
+
+**Task types (handlers implemented):**
+
+| `task_type` | Producer | Handler outcome |
+|-------------|----------|-----------------|
+| `search_keyword` | `main.py` | SERP → save `search_results` → enqueue `crawl_domain` / `extract_contacts` |
+| `crawl_domain` | search handler | Crawl → enqueue `extract_contacts` with packed content |
+| `extract_contacts` | search / crawl | Extract → save contacts; may re-crawl if payload empty |
+
+`save_results` exists in schema/comments and retry map but has **no** worker handler (SERP persist is inside `search_keyword`).
+
+**Ops (read-only on queue):** `scripts/monitor_workers.py`, `scripts/recover_stale_tasks.py`, `scripts/unblock_orphan_queue_tasks.py`.
+
+**Scheduler:** `scripts/scheduler.py` runs `asyncio.run(pipeline.run_pipeline())` daily — not per-row inserts into `task_queue`.
+
+---
+
+## Level 3: Component Diagram — Web UI
 
 ```mermaid
 graph TB
-    subgraph "main.py - Pipeline Orchestrator"
-        KeywordLoader[Keyword Loader<br/>pending keywords from DB] --> StateManager[State Manager<br/>utils/state_manager.py → pipeline_state]
-        StateManager --> SearchOrchestrator[Search Orchestrator]
-        
-        SearchOrchestrator --> SERPGetter[SERP Service<br/>services/serp_service.py]
-        SERPGetter --> SearchResultProcessor[Search Result Processor<br/>services/crawler_service.py]
-        
-        SearchResultProcessor --> DomainCrawler[Domain Crawler<br/>Playwright; DomainRateLimiter per domain;<br/>delay between pages; regex e.g. sitemap loc, quick contact hints]
-        DomainCrawler --> ContentExtractor[Content Extractor<br/>services/extraction_service.py<br/>regex first, LLM fallback]
-        
-        ContentExtractor --> LLMCaller[LLM Caller<br/>YandexGPT / DeepSeek / OpenAI]
-        LLMCaller --> ContactParser[Contact Parser<br/>parses LLM response]
-        
-        ContactParser --> ResultSaver[Result Saver<br/>services/export_service.py]
-        ResultSaver --> DBWriter[Database Writer<br/>models/database.py]
-        
-        DBWriter --> TaskQueueWriter[Task Queue Writer<br/>workers/db_task_queue.py]
+    Browser[Browser] --> Nginx[Nginx :80]
+    Nginx --> FlaskApp[web_server.py<br/>Flask :5000]
+
+    subgraph Routes["routes/"]
+        UserR[user_routes.py<br/>/, /user, /keywords, /contacts, …]
+        AdminR[admin_routes.py<br/>/admin, recover-stale, retry-failed, /llm-data]
+        ApiR[api_routes.py<br/>/api/stats, /api/export, /metrics/pipeline]
+        HealthR[health_routes.py<br/>/health, /health-check, live/ready]
     end
-    
-    MySQL[(MySQL)]
-    KeywordLoader <-->|KeywordService.get_pending_keywords| MySQL
-    StateManager <-->|PipelineState rows| MySQL
-    DBWriter <-->|domain_contacts, contacts, crawl_logs, …| MySQL
-    TaskQueueWriter <-->|task_queue rows| MySQL
-    
-    subgraph "Supporting Components"
-        Config[Configuration<br/>config/settings.py]
-        Logger[Logging System<br/>utils/logger.py]
-        ErrorHandler[Error Handler<br/>retry logic]
+
+    FlaskApp --> Routes
+
+    UserR --> WebStats[utils/web_stats.py]
+    UserR --> KWsvc[services/keyword_service.py]
+    ApiR --> WebStats
+    ApiR --> ExportSvc[services/export_service.py]
+    AdminR --> Scripts[subprocess: scripts/*.py]
+
+    WebStats --> ORM[models/database.py SessionLocal]
+    KWsvc --> ORM
+    ExportSvc --> ORM
+    HealthR --> ORM
+
+    ORM --> MySQL[(MySQL)]
+
+    subgraph Templates["templates/"]
+        T1[index.html]
+        T2[keywords.html keyword_detail.html]
+        T3[contacts.html]
+        T4[admin.html llm_data.html]
+        T5[health.html api_docs.html base.html]
     end
-    
-    Config --> KeywordLoader
-    Config --> SERPGetter
-    Config --> LLMCaller
-    Config --> DBWriter
-    
-    Logger --> SearchOrchestrator
-    Logger --> DomainCrawler
-    Logger --> ResultSaver
-    
-    ErrorHandler --> SERPGetter
-    ErrorHandler --> LLMCaller
-    ErrorHandler --> DBWriter
-    
-    style SearchOrchestrator fill:#1168bd,color:#fff
-    style DomainCrawler fill:#1168bd,color:#fff
-    style ContentExtractor fill:#1168bd,color:#fff
-    style ResultSaver fill:#1168bd,color:#fff
+
+    UserR --> Templates
+    AdminR --> Templates
+    HealthR --> Templates
+
+    style FlaskApp fill:#1168bd,color:#fff
+    style UserR fill:#1168bd,color:#fff
+    style ORM fill:#1168bd,color:#fff
 ```
 
-**Key Components:**
-1. **Keyword Loader** - Loads pending keywords (`is_processed == false`) via `KeywordService.get_pending_keywords`
-2. **State Manager** - Persists run/progress to `pipeline_state` in MySQL (`StateManager`)
-3. **Search Orchestrator** - Coordinates search → crawl → extract pipeline
-4. **SERP Getter** - Fetches search results from SERP API
-5. **Domain Crawler** - Playwright crawl with per-domain semaphore (`DomainRateLimiter`, `MAX_CONCURRENT_DOMAINS_PER_SITE`), `DELAY_BETWEEN_REQUESTS` between pages, and regex helpers (e.g. sitemap `<loc>`, quick contact hints in text)
-6. **Content Extractor** - Regex/HTML pattern extraction first; selective LLM fallback for obfuscated contact pages (`extraction_service.py`)
-7. **Result Saver** - Saves extracted contacts to database
-8. **Task Queue Writer** - Inserts rows into `task_queue` for async workers (workers also read/update `task_queue` and persist crawl/results tables)
+**Notes:** CSRF via `utils/web_security.py`. `/metrics/pipeline` may call `http://127.0.0.1:8000` when `monitoring/healthcheck` is running. Export for UI uses `ExportService`; pipeline writes contacts inside task handlers (not `ExportService`).
 
 ---
 
-## Level 3: Component Diagram - Web UI
+## Level 4: Runtime dependencies (services & orchestration)
 
 ```mermaid
 graph TB
-    subgraph "web_server.py - Flask Application"
-        Browser[Web Browser] -->|HTTP Requests| FlaskRoutes[Flask Routes]
-        
-        FlaskRoutes --> DashboardView[Dashboard View<br/>templates/index.html]
-        FlaskRoutes --> KeywordsView[Keywords Management<br/>templates/keywords.html]
-        FlaskRoutes --> ContactsView[Contacts Viewer<br/>templates/contacts.html]
-        FlaskRoutes --> HealthCheck[Health Check API<br/>/health endpoint]
-        
-        DashboardView --> StatsService[Statistics Service<br/>calculates metrics]
-        KeywordsView --> KeywordService[Keyword Service<br/>services/keyword_service.py]
-        ContactsView --> ExportService[Export Service<br/>services/export_service.py]
-        
-        StatsService --> DBQuery[Database Queries<br/>models/database.py]
-        KeywordService --> DBQuery
-        ExportService --> DBQuery
-        HealthCheck --> DBQuery
-        
-        DBQuery <-->|SQL| MySQL[(MySQL)]
-    end
-    
-    subgraph "Templates"
-        BaseTemplate[base.html<br/>base layout]
-        DashboardTemplate[index.html<br/>main dashboard]
-        KeywordsTemplate[keywords.html<br/>keyword management]
-        ContactsTemplate[contacts.html<br/>contact viewer]
-        LlmDataTemplate[llm_data.html<br/>LLM telemetry]
-    end
-    
-    FlaskRoutes --> BaseTemplate
-    DashboardView --> DashboardTemplate
-    KeywordsView --> KeywordsTemplate
-    ContactsView --> ContactsTemplate
-    FlaskRoutes --> LlmDataTemplate
-    
-    style FlaskRoutes fill:#1168bd,color:#fff
-    style DBQuery fill:#1168bd,color:#fff
-    style ExportService fill:#1168bd,color:#fff
+    Main[main.py<br/>ContactMiningPipeline]
+    Queue[workers/db_task_queue.py]
+    Web[routes/* + web_server.py]
+
+    Main --> Queue
+    Main --> KW[keyword_service]
+    Main --> SM[state_manager]
+    Main --> SerpP[serp_service preflight only]
+
+    Queue --> Serp[serp_service]
+    Queue --> Crawl[crawler_service]
+    Queue --> Ext[extraction_service]
+    Queue --> SF[utils/serp_filters<br/>serp_snippet crawl_payload]
+
+    Web --> KW
+    Web --> Exp[export_service]
+    Web --> WS[web_stats]
+
+    KW -.->|optional| Trans[translation_service<br/>not used on UI add_keyword]
+
+    Crawl --> HF[utils/http_fetch]
+    Serp --> YX[utils/yandex_search_*]
+
+    style Queue fill:#1168bd,color:#fff
+    style Main fill:#1168bd,color:#fff
 ```
 
-**Key Components:**
-1. **Flask Routes** - HTTP request handlers
-2. **Dashboard View** - Shows statistics and pipeline status
-3. **Keywords Management** - Add/edit/search keywords
-4. **Contacts Viewer** - Browse and filter extracted contacts
-5. **Export Service** - Export contacts to CSV/Excel
-6. **Health Check** - System health monitoring endpoint
+Arrows: **uses** (runtime). `ExportService` is not on the hot pipeline path.
 
 ---
 
-## Level 3: Component Diagram - Task Queue System
-
-```mermaid
-graph TB
-    subgraph "workers/db_task_queue.py - Task Queue"
-        TaskProducer[Task Producer<br/>adds tasks to queue] --> TaskTable[(task_queue table)]
-        
-        TaskConsumer[Task Consumer<br/>worker loop] <-->|locks rows, runs handlers| TaskTable
-        TaskConsumer --> RetryHandler[Retry Handler<br/>handles failures]
-        
-        RetryHandler -->|Re-queues| TaskTable
-        RetryHandler -->|Marks failed| TaskTable
-        
-        TaskScheduler[Task Scheduler<br/>scripts/scheduler.py] -->|Scheduled tasks| TaskTable
-        
-        MonitorWorker[Monitor Worker<br/>scripts/monitor_workers.py] <-->|Reads status| TaskTable
-    end
-    
-    MySQL_TQ[(MySQL)]
-    TaskTable <-->|read/write| MySQL_TQ
-    TaskConsumer <-->|handlers persist search_results, domain_contacts, contacts, crawl_logs, keywords| MySQL_TQ
-    
-    subgraph "Task Types"
-        SearchTask[search_keyword<br/>Fetch SERP results]
-        CrawlTask[crawl_domain<br/>Crawl website]
-        ExtractTask[extract_contacts<br/>regex/HTML + LLM fallback]
-        SaveSERP[search_keyword saves<br/>search_results in DB]
-    end
-    
-    TaskProducer --> SearchTask
-    TaskProducer --> CrawlTask
-    TaskProducer --> ExtractTask
-    TaskProducer --> SaveTask
-    
-    TaskConsumer --> SearchTask
-    TaskConsumer --> CrawlTask
-    TaskConsumer --> ExtractTask
-    TaskConsumer --> SaveTask
-    
-    style TaskConsumer fill:#1168bd,color:#fff
-    style TaskProducer fill:#1168bd,color:#fff
-    style RetryHandler fill:#1168bd,color:#fff
-```
-
-**Key Components:**
-1. **Task Producer** - Creates tasks when pipeline runs (`add_task` inserts into `task_queue`)
-2. **Task Consumer** - Worker loop locks rows, runs `search_keyword` / `crawl_domain` / `extract_contacts` handlers; SERP rows saved inside `search_keyword` (no separate `save_results` handler)
-3. **Retry Handler** - Implements retry logic with exponential backoff
-4. **Task Scheduler** - Schedules recurring tasks
-5. **Monitor Worker** - Monitors queue health and stuck tasks
-
----
-
-## Level 4: Code Structure - Services Layer
-
-```mermaid
-graph LR
-    subgraph "services/ - Business Logic"
-        CrawlerService[crawler_service.py<br/>Website crawling]
-        ExtractionService[extraction_service.py<br/>regex/HTML extraction, LLM fallback]
-        ExportService[export_service.py<br/>export_to_flat_csv, export_to_csv,<br/>export_to_excel, get_export_summary]
-        KeywordService[keyword_service.py<br/>Keyword management]
-    end
-    
-    SerpService[serp_service.py<br/>SERP API client]
-    
-    subgraph "utils/ - Utilities"
-        StateManager[state_manager.py<br/>Progress tracking]
-    end
-    
-    CrawlerService --> SerpService
-    ExtractionService --> CrawlerService
-    ExportService --> ExtractionService
-    CrawlerService --> StateManager
-    
-    style CrawlerService fill:#1168bd,color:#fff
-    style ExtractionService fill:#1168bd,color:#fff
-    style ExportService fill:#1168bd,color:#fff
-```
-
-**Key Components:**
-1. **crawler_service.py** - Website crawling with Playwright, per-domain limits, link and page content extraction
-2. **extraction_service.py** - Regex/HTML-based contact extraction from content first; selective LLM-based extraction for obfuscated pages when enabled; LLM response handling
-3. **export_service.py** - DB export: flat CSV, per-domain CSV, Excel, and `get_export_summary`
-4. **keyword_service.py** - Keywords in DB: add, pending selection, `is_processed`, summaries
-5. **serp_service.py** - SERP client (DuckDuckGo, SerpAPI, Yandex Search API)
-6. **state_manager.py** - Pipeline run progress in `pipeline_state` (`StateManager`)
-
-*Note:* Arrows show dependency direction (A → B means A uses B). Blue node fill marks emphasized `services/` modules. Diagram file names are the intended code-level split; compare with `services/`, `getters/`, `checkers/`, and `utils/` in the repo—some labels may not match the current tree.
-
----
-
-## Database Schema Overview
+## Database schema overview
 
 ```mermaid
 erDiagram
@@ -300,17 +310,18 @@ erDiagram
     SEARCH_RESULTS ||--o{ DOMAIN_CONTACTS : found_on
     DOMAIN_CONTACTS ||--o{ CONTACTS : contains
     KEYWORDS ||--o{ PIPELINE_STATE : tracked_by
-    TASK_QUEUE ||--o{ TASK_QUEUE : "depends_on (self-ref)"
-    
+    KEYWORDS ||--o{ TASK_QUEUE : "keyword_id"
+    TASK_QUEUE ||--o| TASK_QUEUE : depends_on_task_id
+
     KEYWORDS {
         int id PK
-        string keyword
+        string keyword UK
         string language
         string country
         boolean is_processed
-        datetime created_at
+        datetime last_crawled_at
     }
-    
+
     SEARCH_RESULTS {
         int id PK
         int keyword_id FK
@@ -319,19 +330,21 @@ erDiagram
         text snippet
         int position
         boolean is_processed
+        text raw_search_query
+        json raw_search_response
     }
-    
+
     DOMAIN_CONTACTS {
         int id PK
         int search_result_id FK
         string domain
         json tags
-        json metadata
+        json site_metadata "DB column metadata"
         json contacts_json
         string extraction_method
         int confidence_score
     }
-    
+
     CONTACTS {
         int id PK
         int domain_contact_id FK
@@ -339,37 +352,37 @@ erDiagram
         string value
         boolean is_verified
     }
-    
+
     PIPELINE_STATE {
         int id PK
-        string run_id
+        string run_id "shared across checkpoints"
         int keyword_id FK
         string status
         int progress_percent
         int websites_processed
         int contacts_found
     }
-    
+
     TASK_QUEUE {
         int id PK
         string task_name
-        string task_type
+        string task_type "search_keyword crawl_domain extract_contacts"
         text payload
         string status
         int priority
         int retry_count
         int max_retries
         int depends_on_task_id FK
+        int keyword_id
+        string locked_by
     }
-    
+
     CRAWL_LOGS {
         int id PK
         string domain
         string url
         int status_code
         text error_message
-        int pages_crawled
-        int duration_seconds
         text llm_request
         text llm_response
         string llm_model
@@ -379,114 +392,98 @@ erDiagram
 
 ---
 
-## Deployment Architecture
+## Deployment architecture
 
 ```mermaid
 graph TB
-    subgraph "Developer Machine"
-        DevCode[Development Code] -->|git push| GitHub[GitHub Repository]
+    Dev[Developer] -->|git push| GH[GitHub]
+    GH --> GHA[GitHub Actions<br/>sonarcloud.yml]
+    GHA --> SC[SonarCloud]
+
+    Admin[Administrator] -->|SSH git pull| Code[/opt/b2b-contact-miner]
+    Admin -->|.env| Code
+
+    Code --> Nginx[Nginx :80]
+    Code --> Flask[Flask :5000<br/>supervisor b2b-web]
+    Code --> Pipe[Pipeline<br/>cron 02:00 or<br/>run_pipeline_background.sh]
+
+    Pipe --> MySQL[(Remote MySQL)]
+    Flask --> MySQL
+
+    User[End user] -->|http://85.198.86.237| Nginx
+
+    subgraph DevLocal["Local / dev optional"]
+        FAPI[uvicorn healthcheck or api_server :8000]
     end
-    
-    subgraph "GitHub Actions CI/CD"
-        GitHub -->|Triggers| SonarScan[SonarCloud Scan]
-        SonarScan -->|Quality Report| SonarCloud[SonarCloud Dashboard]
-        SonarScan -->|Pass/Fail| GitHub
-    end
-    
-    subgraph "Production Server (85.198.86.237)"
-        GitHub -->|git pull| ServerCode[Server Code]
-        
-        ServerCode --> Nginx[Nginx<br/>Port 80]
-        ServerCode --> FlaskApp[Flask App<br/>Port 5000]
-        ServerCode --> FastAPI[FastAPI<br/>Port 8000]
-        ServerCode --> Pipeline[Main Pipeline]
-        
-        Supervisor[Supervisor] -->|Manages| FlaskApp
-        Supervisor -->|Manages| FastAPI
-        
-        FlaskApp <-->|Reads/Writes| RemoteDB[(Remote MySQL<br/>kalmyk3j.beget.tech)]
-        FastAPI <-->|Reads| RemoteDB
-        Pipeline <-->|Reads/Writes| RemoteDB
-        
-    end
-    
-    User[End User] -->|http://85.198.86.237| Nginx
-    Admin[Administrator] -->|SSH| ServerCode
-    Admin -->|scp .env| ServerCode
-    
-    style GitHub fill:#438dd5,color:#fff
-    style SonarCloud fill:#438dd5,color:#fff
-    style RemoteDB fill:#08427b,color:#fff
+
+    FAPI -.-> MySQL
+
+    style GH fill:#438dd5,color:#fff
+    style SC fill:#438dd5,color:#fff
+    style MySQL fill:#08427b,color:#fff
 ```
 
----
-
-## Key Design Decisions
-
-### 1. Database Choice
-- **MySQL** for persistent storage (relational data, ACID compliance); local Docker example uses image `mysql:8.0` (`doc/docker-compose.yml`)
-
-### 2. Task Queue
-- **Database-backed queue** instead of external message brokers
-- Pros: Persistence, no extra infrastructure, easy monitoring
-- Cons: Slower than message brokers, but acceptable for this use case
-
-### 3. LLM Integration
-- **Multiple LLM providers** (YandexGPT, DeepSeek, OpenAI) via settings flags
-- **Fallback mechanism** if one provider fails
-
-### 4. Web Framework
-- **Flask** for UI (simple, lightweight, Jinja2 templates)
-- **FastAPI** for monitoring API (async, auto-generated docs)
-
-### 5. Deployment
-- **Nginx reverse proxy** for security and performance
-- **Supervisor** for process management
-- **SSH + Git** for deployment (simple, no Docker overhead)
-
-### 6. Code Quality
-- **SonarCloud** for continuous code quality monitoring
-- **GitHub Actions** for automated analysis on every push
+**Prod maintenance (cron):** `scripts/weekly_maintenance.sh` — quality report, SERP denylist, orphan queue fix, MySQL id repair.
 
 ---
 
-## Technology Stack Summary
+## Key design decisions
+
+### 1. Database
+- **MySQL** for data and **task queue** (`task_queue` table); Docker example: `mysql:8.0` in `doc/docker-compose.yml`.
+
+### 2. Async processing
+- **In-process** `DatabaseTaskQueue` (no Redis); worker count = `MAX_CONCURRENT_DOMAINS` (default **12**).
+- **Orchestrator** only enqueues `search_keyword`; handlers chain crawl/extract tasks.
+
+### 3. SERP
+- Single active provider via `SERP_API_PROVIDER`: `duckduckgo` | `serpapi` | `yandex` (prod CIS typically `yandex`).
+
+### 4. Extraction
+- Regex / JSON-LD / mailto first; **LLM fallback** when `USE_LLM_EXTRACTION` and provider keys are set.
+
+### 5. Web vs pipeline
+- **Flask** + `routes/` for UI; **ExportService** for downloads only.
+- **Pipeline** persists contacts in `db_task_queue` handlers.
+
+### 6. Deployment
+- **Nginx** → Flask; **Supervisor** manages web only (`deploy/deploy.sh`).
+- **Pipeline** via cron / background script, not supervisord in default deploy.
+
+### 7. Quality
+- **SonarCloud** on every push/PR (`.github/workflows/sonarcloud.yml`).
+
+---
+
+## Technology stack summary
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Frontend** | HTML/CSS/JS + Jinja2 | Web UI templates |
-| **Backend Web** | Flask 3.x | Web application framework |
-| **Backend API** | FastAPI | Monitoring and health check API |
-| **Database** | MySQL (`mysql:8.0` in `doc/docker-compose.yml`) | Primary data storage |
-| **Browser Automation** | Playwright | Website crawling |
-| **AI/ML** | YandexGPT, DeepSeek, OpenAI | Contact extraction: regex/HTML first, LLM fallback when needed |
-| **Task Queue** | Custom DB-based | Async task processing |
-| **Web Server** | Nginx | Reverse proxy |
-| **Process Manager** | Supervisor (`apt install supervisor` on deploy) | Process supervision |
-| **CI/CD** | GitHub Actions | Automated testing and analysis |
-| **Code Quality** | SonarCloud | Static code analysis |
-| **Deployment** | SSH + Git | Manual deployment |
+| **UI** | Flask 3 + Jinja2 templates | Dashboard, keywords, contacts, admin |
+| **Pipeline** | `asyncio` + `main.py` | Enqueue and supervise runs |
+| **Workers** | `workers/db_task_queue.py` | SERP / crawl / extract handlers |
+| **Database** | MySQL + SQLAlchemy | Storage + queue |
+| **Crawl** | `utils/http_fetch` + Playwright | HTTP-first, browser fallback |
+| **SERP** | DuckDuckGo / SerpAPI / Yandex Search API | Config-driven |
+| **LLM** | YandexGPT, DeepSeek, OpenAI | Optional extraction fallback |
+| **Proxy** | Nginx | Public access to Flask |
+| **Process mgr** | Supervisor | `b2b-web` (Flask) on prod |
+| **CI** | GitHub Actions + SonarCloud | Static analysis |
 
 ---
 
-## Security Considerations
+## Security considerations
 
-1. **Network Security**
-   - Flask binds to localhost only (127.0.0.1)
-   - Nginx provides external access with security headers
-   - SSH key authentication for server access
+1. **Network:** Flask on `127.0.0.1`; Nginx terminates public HTTP with security headers (`deploy/nginx-b2b.conf`).
+2. **Secrets:** `.env` not in git; DB and API keys from environment.
+3. **App:** CSRF on mutating routes; SQLAlchemy ORM; keyword text sanitization in `user_routes.py`.
+4. **Monitoring:** Flask `/health`; optional FastAPI health app when pipeline sets `healthcheck.task_queue`.
 
-2. **Data Security**
-   - `.env` file not committed to Git
-   - Database credentials in environment variables
-   - SonarCloud token stored securely
+---
 
-3. **Application Security**
-   - Input validation on all user inputs
-   - SQL injection prevention (SQLAlchemy ORM)
-   - XSS protection (security headers)
+## Related docs
 
-4. **Monitoring**
-   - Health check endpoints
-   - Error logging
-   - SonarCloud vulnerability scanning
+- [HOW_IT_WORKS.md](HOW_IT_WORKS.md) — step-by-step pipeline
+- [TASK_QUEUE.md](TASK_QUEUE.md) — queue operations
+- [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) — full schema reference
+- [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — server setup

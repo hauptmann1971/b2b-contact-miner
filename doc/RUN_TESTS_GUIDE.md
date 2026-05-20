@@ -1,5 +1,7 @@
 # Инструкция по запуску тестов
 
+**CI:** каждый push/PR запускает `.github/workflows/tests.yml` (`pytest tests/` на Python 3.11).
+
 ## Проблема
 
 Сейчас нет доступа к PyPI (Python Package Index) для установки pytest.

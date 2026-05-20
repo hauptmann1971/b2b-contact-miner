@@ -38,21 +38,17 @@ User → Web UI (Flask) → MySQL Database
 ### 3. Data Flow
 
 ```
-1. User adds keyword via Web UI
+1. User adds keyword via Web UI or getters/add_keywords.py
    ↓
 2. Keyword stored in MySQL (keywords table)
    ↓
-3. Main pipeline loads unprocessed keywords
+3. main.py run_pipeline() enqueues search_keyword tasks
    ↓
-4. Search SERP API for keyword
+4. workers/db_task_queue.py: SERP → save search_results → crawl_domain → extract_contacts
    ↓
-5. Crawl resulting websites with Playwright
+5. Contacts saved to domain_contacts / contacts / crawl_logs
    ↓
-6. Extract contacts using LLM (YandexGPT/DeepSeek/OpenAI)
-   ↓
-7. Save contacts to MySQL (contacts table)
-   ↓
-8. Display results in Web UI
+6. Display and export via Web UI
 ```
 
 ### 4. Technology Stack

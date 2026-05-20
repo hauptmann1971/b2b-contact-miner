@@ -1,5 +1,7 @@
 # Migration Guide: Redis to Database Task Queue
 
+> **Historical.** Migration to MySQL `task_queue` is complete. Current behavior: [TASK_QUEUE.md](../doc/TASK_QUEUE.md).
+
 ## Overview
 This migration replaces Redis-based task queue with MySQL database-backed queue for better reliability and persistence.
 
@@ -34,16 +36,11 @@ The following files have been updated:
 - ✅ `migrations/apply_migrations.py` - Migration runner
 
 ### 3. Update main.py
-Replace AsyncTaskQueue with DatabaseTaskQueue in your main pipeline:
+`main.py` already uses `DatabaseTaskQueue` (default concurrency from `MAX_CONCURRENT_DOMAINS`, typically **12**):
 
 ```python
-# OLD CODE:
 from workers.db_task_queue import DatabaseTaskQueue
-task_queue = DatabaseTaskQueue(max_concurrent=20)
-
-# NEW CODE:
-from workers.db_task_queue import DatabaseTaskQueue
-task_queue = DatabaseTaskQueue(max_concurrent=20)
+task_queue = DatabaseTaskQueue(max_concurrent=settings.MAX_CONCURRENT_DOMAINS)
 ```
 
 ### 4. Update Task Submission

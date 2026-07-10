@@ -24,6 +24,7 @@ def _column_exists(table_name: str, column_name: str) -> bool:
 def ensure_multitenant_schema() -> None:
     from models.database import Base
     import models.tenant  # noqa: F401
+    import models.task_queue  # noqa: F401 — register task_queue for create_all
 
     Base.metadata.create_all(bind=engine)
     _add_tenant_columns_if_missing()
@@ -153,7 +154,11 @@ def _backfill_tenant_ids(db, tenant_id: int) -> None:
         "UPDATE contacts c JOIN domain_contacts dc ON dc.id = c.domain_contact_id SET c.tenant_id = dc.tenant_id WHERE c.tenant_id IS NULL",
         "UPDATE pipeline_state ps LEFT JOIN keywords k ON k.id = ps.keyword_id SET ps.tenant_id = COALESCE(k.tenant_id, :tid) WHERE ps.tenant_id IS NULL",
         "UPDATE crawl_logs SET tenant_id = :tid WHERE tenant_id IS NULL",
-        "UPDATE task_queue tq LEFT JOIN keywords k ON k.id = tq.keyword_id SET tq.tenant_id = COALESCE(k.tenant_id, :tid) WHERE tq.tenant_id IS NULL",
     ]
+    if _table_exists("task_queue"):
+        statements.append(
+            "UPDATE task_queue tq LEFT JOIN keywords k ON k.id = tq.keyword_id "
+            "SET tq.tenant_id = COALESCE(k.tenant_id, :tid) WHERE tq.tenant_id IS NULL"
+        )
     for sql in statements:
         db.execute(text(sql), {"tid": tenant_id})

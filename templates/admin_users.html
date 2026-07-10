@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% import "includes/components.html" as ui %}
+
+{% block title %}Пользователи — Admin{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        {{ ui.page_header(
+            "👥 Пользователи",
+            subtitle="Управление доступом в компании «" ~ tenant_name ~ "»",
+            menu_items=[
+                {"href": url_for('admin_dashboard'), "label": "Admin Console", "target": ""},
+                {"href": url_for('user_workspace'), "label": "User Workspace", "target": ""}
+            ]
+        ) }}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% call ui.section("➕ Добавить пользователя", "panel") %}
+            <form method="POST" action="{{ url_for('admin_users_create') }}" class="user-form">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <div class="form-grid">
+                    <div>
+                        <label for="username">Логин</label>
+                        <input type="text" id="username" name="username" required minlength="3" maxlength="128" placeholder="ivan" autocomplete="off">
+                    </div>
+                    <div>
+                        <label for="display_name">Имя</label>
+                        <input type="text" id="display_name" name="display_name" maxlength="255" placeholder="Иван Петров">
+                    </div>
+                    <div>
+                        <label for="role">Роль</label>
+                        <select id="role" name="role" required>
+                            {% for role in manageable_roles %}
+                            <option value="{{ role.value }}">{{ role_labels[role.value] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="password">Пароль</label>
+                        <input type="password" id="password" name="password" minlength="8" autocomplete="new-password" placeholder="мин. 8 символов">
+                    </div>
+                    <div>
+                        <label for="telegram_id">Telegram ID</label>
+                        <input type="number" id="telegram_id" name="telegram_id" min="1" placeholder="опционально">
+                    </div>
+                </div>
+                <p class="muted">Нужен пароль <em>или</em> Telegram ID. Для входа через Telegram пользователь должен быть в боте @{{ telegram_bot_username or 'your_bot' }}.</p>
+                <button type="submit" class="btn btn-primary">Создать пользователя</button>
+            </form>
+        {% endcall %}
+
+        {% call ui.section("📋 Список пользователей", "panel") %}
+            {% if users %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Логин</th>
+                        <th>Имя</th>
+                        <th>Роль</th>
+                        <th>Telegram</th>
+                        <th>Пароль</th>
+                        <th>Статус</th>
+                        <th>Последний вход</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for u in users %}
+                    <tr class="{% if not u.is_active %}row-inactive{% endif %}">
+                        <td>{{ u.id }}</td>
+                        <td><strong>{{ u.username }}</strong>{% if u.id == current_user_id %} <span class="badge">вы</span>{% endif %}</td>
+                        <td>{{ u.display_name or '—' }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin_users_update_role', user_id=u.id) }}" class="inline-form">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <select name="role" onchange="this.form.submit()">
+                                    {% for role in manageable_roles %}
+                                    <option value="{{ role.value }}"{% if u.role == role %} selected{% endif %}>{{ role_labels[role.value] }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                        </td>
+                        <td>{{ u.telegram_id or '—' }}</td>
+                        <td>{% if u.password_hash %}да{% else %}—{% endif %}</td>
+                        <td>{% if u.is_active %}<span class="status-active">активен</span>{% else %}<span class="status-inactive">выкл</span>{% endif %}</td>
+                        <td>{{ u.last_login_at.strftime('%d.%m.%Y %H:%M') if u.last_login_at else '—' }}</td>
+                        <td class="actions-cell">
+                            <form method="POST" action="{{ url_for('admin_users_set_active', user_id=u.id) }}" class="inline-form">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="is_active" value="{{ 0 if u.is_active else 1 }}">
+                                <button type="submit" class="btn btn-small">{% if u.is_active %}Деактивировать{% else %}Активировать{% endif %}</button>
+                            </form>
+                            <details class="password-details">
+                                <summary class="btn btn-small">Сменить пароль</summary>
+                                <form method="POST" action="{{ url_for('admin_users_set_password', user_id=u.id) }}" class="password-form">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <input type="password" name="password" minlength="8" required placeholder="новый пароль">
+                                    <button type="submit" class="btn btn-small btn-primary">Сохранить</button>
+                                </form>
+                            </details>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="muted">Пользователей пока нет.</div>
+            {% endif %}
+        {% endcall %}
+
+        <div class="panel muted">
+            <strong>Роли:</strong>
+            viewer — только просмотр;
+            member — keywords и контакты;
+            owner — полный доступ и админка.
+        </div>
+    </div>
+{% endblock %}

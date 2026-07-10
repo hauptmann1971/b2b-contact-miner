@@ -30,7 +30,8 @@ User → Web UI (Flask) → MySQL Database
 | Component | File | Purpose |
 |-----------|------|---------|
 | **Main Pipeline** | `main.py` | Orchestrates search → crawl → extract workflow |
-| **Web UI** | `web_server.py` | Flask dashboard for viewing results |
+| **Web UI** | `web_server.py` | Flask dashboard, auth, tenant-scoped data |
+| **Auth** | `routes/auth_routes.py`, `models/tenant.py` | Login, roles, multi-tenant isolation |
 | **Monitoring API** | `api_server.py` | FastAPI health checks |
 | **Task Queue** | `workers/db_task_queue.py` | Async task processing |
 | **Database Models** | `models/database.py` | SQLAlchemy ORM models |

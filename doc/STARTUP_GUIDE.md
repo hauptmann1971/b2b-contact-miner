@@ -432,6 +432,6 @@ engine = create_engine(
 
 - [Документация Flask сервера](doc/WEB_SERVER_GUIDE.md)
 - [Новые страницы интерфейса](NEW_PAGES_GUIDE.md)
-- [Архитектура системы](doc/ARCHITECTURE.md)
+- [Архитектура системы](HOW_IT_WORKS.md)
 - [Настройка Redis](doc/REDIS_SETUP.md)
 - [Настройка Docker](doc/DOCKER_SETUP.md)

@@ -13,7 +13,7 @@ def test_get_recent_contacts_maps_rows():
             "created_at": None,
         }
     ]
-    rows = get_recent_contacts(db, limit=5)
+    rows = get_recent_contacts(db, tenant_id=1, limit=5)
     assert len(rows) == 1
     assert rows[0]["value"] == "a@example.com"
     assert rows[0]["domain"] == "example.com"

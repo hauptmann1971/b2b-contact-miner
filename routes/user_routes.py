@@ -4,6 +4,8 @@ from flask import current_app, flash, redirect, render_template, request, url_fo
 from sqlalchemy import desc, text
 
 from models.database import Contact, DomainContact, Keyword, PipelineState, SearchResult, SessionLocal
+from utils.tenant_context import get_request_context, get_request_context_or_raise, keyword_belongs_to_tenant, scoped_query
+from utils.web_security import check_admin_auth, login_required, member_required, viewer_required
 from utils.web_stats import get_contact_type_counts, get_recent_contacts
 
 DEFAULT_LANGUAGES = ["ru", "en", "kk", "uz", "ky", "tg", "az", "hy", "ka", "be", "ro", "de", "fr"]
@@ -39,18 +41,23 @@ def _resolve_locale_from_form():
 
 
 def _build_user_dashboard_context(db):
-    total_keywords = db.query(Keyword).count()
-    processed_keywords = db.query(Keyword).filter(Keyword.is_processed.is_(True)).count()
-    total_domains = db.query(DomainContact).count()
-    total_contacts = db.query(Contact).count()
+    ctx = get_request_context_or_raise()
+    keywords_q = scoped_query(db, Keyword, ctx)
+    contacts_q = scoped_query(db, Contact, ctx)
+    domains_q = scoped_query(db, DomainContact, ctx)
 
-    recent_keywords = db.query(Keyword).order_by(desc(Keyword.created_at)).limit(10).all()
-    recent_runs = db.query(PipelineState).order_by(desc(PipelineState.started_at)).limit(10).all()
-    recent_contact_rows = get_recent_contacts(db, limit=20)
+    total_keywords = keywords_q.count()
+    processed_keywords = keywords_q.filter(Keyword.is_processed.is_(True)).count()
+    total_domains = domains_q.count()
+    total_contacts = contacts_q.count()
 
-    type_counts = get_contact_type_counts(db)
-    db_languages = [row[0] for row in db.query(Keyword.language).distinct().all() if row[0]]
-    db_countries = [row[0] for row in db.query(Keyword.country).distinct().all() if row[0]]
+    recent_keywords = keywords_q.order_by(desc(Keyword.created_at)).limit(10).all()
+    recent_runs = scoped_query(db, PipelineState, ctx).order_by(desc(PipelineState.started_at)).limit(10).all()
+    recent_contact_rows = get_recent_contacts(db, tenant_id=ctx.tenant_id, limit=20) if check_admin_auth() else []
+
+    type_counts = get_contact_type_counts(db, tenant_id=ctx.tenant_id)
+    db_languages = [row[0] for row in keywords_q.with_entities(Keyword.language).distinct().all() if row[0]]
+    db_countries = [row[0] for row in keywords_q.with_entities(Keyword.country).distinct().all() if row[0]]
     language_options = sorted(set(DEFAULT_LANGUAGES + db_languages))
     country_options = sorted(set(DEFAULT_COUNTRIES + db_countries))
 
@@ -85,10 +92,12 @@ def register_user_routes(app):
         return response
 
     @app.route("/")
+    @login_required
     def index():
         return user_workspace()
 
     @app.route("/user")
+    @login_required
     def user_workspace():
         db = _db_session()
         try:
@@ -97,7 +106,9 @@ def register_user_routes(app):
             db.close()
 
     @app.route("/add_keyword", methods=["POST"])
+    @member_required
     def add_keyword():
+        ctx = get_request_context_or_raise()
         keyword_text = request.form.get("keyword", "").strip()
         language, country = _resolve_locale_from_form()
         if not keyword_text:
@@ -110,11 +121,24 @@ def register_user_routes(app):
         keyword_text = _sanitize_keyword_text(keyword_text)
         db = _db_session()
         try:
-            existing = db.query(Keyword).filter(Keyword.keyword == keyword_text).first()
+            existing = (
+                scoped_query(db, Keyword, ctx)
+                .filter(Keyword.keyword == keyword_text, Keyword.language == language, Keyword.country == country)
+                .first()
+            )
             if existing:
                 flash(f'Ключевое слово "{keyword_text}" уже существует', "warning")
                 return redirect(url_for("index"))
-            db.add(Keyword(keyword=keyword_text, language=language, country=country, is_processed=False))
+            db.add(
+                Keyword(
+                    tenant_id=ctx.tenant_id,
+                    created_by_user_id=ctx.user_id,
+                    keyword=keyword_text,
+                    language=language,
+                    country=country,
+                    is_processed=False,
+                )
+            )
             db.commit()
             flash(f'Ключевое слово "{keyword_text}" успешно добавлено!', "success")
             return redirect(url_for("index"))
@@ -126,7 +150,9 @@ def register_user_routes(app):
             db.close()
 
     @app.route("/add_keywords_bulk", methods=["POST"])
+    @member_required
     def add_keywords_bulk():
+        ctx = get_request_context_or_raise()
         bulk_keywords = request.form.get("bulk_keywords", "")
         language, country = _resolve_locale_from_form()
         rows = []
@@ -141,13 +167,28 @@ def register_user_routes(app):
 
         db = _db_session()
         try:
-            existing = set(item[0] for item in db.query(Keyword.keyword).filter(Keyword.keyword.in_(rows)).all())
+            existing = set(
+                item[0]
+                for item in scoped_query(db, Keyword, ctx)
+                .filter(Keyword.keyword.in_(rows), Keyword.language == language, Keyword.country == country)
+                .with_entities(Keyword.keyword)
+                .all()
+            )
             added, skipped = 0, 0
             for row in rows:
                 if row in existing:
                     skipped += 1
                     continue
-                db.add(Keyword(keyword=row, language=language, country=country, is_processed=False))
+                db.add(
+                    Keyword(
+                        tenant_id=ctx.tenant_id,
+                        created_by_user_id=ctx.user_id,
+                        keyword=row,
+                        language=language,
+                        country=country,
+                        is_processed=False,
+                    )
+                )
                 added += 1
             db.commit()
             flash(f"Массовое добавление завершено: добавлено {added}, пропущено {skipped}", "success")
@@ -159,12 +200,14 @@ def register_user_routes(app):
         return redirect(url_for("index"))
 
     @app.route("/keywords")
+    @login_required
     def keywords_list():
+        ctx = get_request_context_or_raise()
         db = _db_session()
         try:
             page = request.args.get("page", 1, type=int)
             per_page = 20
-            keywords_query = db.query(Keyword).order_by(desc(Keyword.created_at))
+            keywords_query = scoped_query(db, Keyword, ctx).order_by(desc(Keyword.created_at))
             total = keywords_query.count()
             keywords = keywords_query.offset((page - 1) * per_page).limit(per_page).all()
             return render_template("keywords.html", keywords=keywords, page=page, per_page=per_page, total=total)
@@ -172,41 +215,45 @@ def register_user_routes(app):
             db.close()
 
     @app.route("/keyword/<int:keyword_id>")
+    @viewer_required
     def keyword_detail(keyword_id):
+        ctx = get_request_context_or_raise()
         db = _db_session()
         try:
-            keyword = db.query(Keyword).filter(Keyword.id == keyword_id).first()
+            keyword = scoped_query(db, Keyword, ctx).filter(Keyword.id == keyword_id).first()
             if not keyword:
                 flash("Ключевое слово не найдено", "error")
                 return redirect(url_for("keywords_list"))
-            search_results = db.query(SearchResult).filter(SearchResult.keyword_id == keyword_id).order_by(SearchResult.position).all()
+            search_results = db.query(SearchResult).filter(SearchResult.keyword_id == keyword_id, SearchResult.tenant_id == ctx.tenant_id).order_by(SearchResult.position).all()
             domain_contacts = []
             for sr in search_results:
-                domains = db.query(DomainContact).filter(DomainContact.search_result_id == sr.id).all()
+                domains = db.query(DomainContact).filter(DomainContact.search_result_id == sr.id, DomainContact.tenant_id == ctx.tenant_id).all()
                 for domain in domains:
-                    contacts = db.query(Contact).filter(Contact.domain_contact_id == domain.id).all()
+                    contacts = db.query(Contact).filter(Contact.domain_contact_id == domain.id, Contact.tenant_id == ctx.tenant_id).all()
                     domain_contacts.append({"domain": domain, "contacts": contacts, "search_result": sr})
             return render_template("keyword_detail.html", keyword=keyword, search_results=search_results, domain_contacts=domain_contacts)
         finally:
             db.close()
 
     @app.route("/contacts")
+    @viewer_required
     def contacts_list():
+        ctx = get_request_context_or_raise()
         db = _db_session()
         try:
             page = request.args.get("page", 1, type=int)
             per_page = 50
             contact_type = request.args.get("type", "")
             query = request.args.get("q", "").strip()
-            where_parts = []
-            params = {}
+            where_parts = ["k.tenant_id = :tenant_id"]
+            params = {"tenant_id": ctx.tenant_id}
             if contact_type:
                 where_parts.append("LOWER(c.contact_type) = :contact_type")
                 params["contact_type"] = contact_type.lower()
             if query:
                 where_parts.append("(c.value LIKE :q OR dc.domain LIKE :q OR k.keyword LIKE :q)")
                 params["q"] = f"%{query}%"
-            where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+            where_sql = f"WHERE {' AND '.join(where_parts)}"
             total_sql = text(
                 f"""
                 SELECT COUNT(*)
@@ -246,10 +293,12 @@ def register_user_routes(app):
             db.close()
 
     @app.route("/delete_keyword/<int:keyword_id>", methods=["POST"])
+    @member_required
     def delete_keyword(keyword_id):
+        ctx = get_request_context_or_raise()
         db = _db_session()
         try:
-            keyword = db.query(Keyword).filter(Keyword.id == keyword_id).first()
+            keyword = scoped_query(db, Keyword, ctx).filter(Keyword.id == keyword_id).first()
             if keyword:
                 db.delete(keyword)
                 db.commit()

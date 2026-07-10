@@ -1,6 +1,36 @@
-# 🆕 Новые страницы веб-интерфейса
+# UI pages map
 
-## Health Check страница (`/health-check`)
+> Auth details: [AUTH_MULTITENANT.md](AUTH_MULTITENANT.md)
+
+## Public
+
+| Path | Page |
+|------|------|
+| `/login` | Login (password + Telegram) |
+| `/health`, `/health/live`, `/health/ready` | Health JSON |
+| `/health-check` | Health UI (visual) |
+
+## Authenticated (viewer+)
+
+| Path | Page |
+|------|------|
+| `/`, `/user` | Dashboard, add keywords (form visible; POST needs member) |
+| `/keywords`, `/keyword/<id>` | Keyword list and detail |
+| `/contacts` | Contacts table |
+| `/api/stats`, `/api/keywords` | JSON API (tenant-scoped) |
+
+## Owner only
+
+| Path | Page |
+|------|------|
+| `/admin` | Admin console (queue, pipeline, settings) |
+| `/admin/users` | User management (create, roles, passwords) |
+| `/llm-data` | LLM raw data viewer |
+| `/api-docs` | API documentation UI |
+
+---
+
+## Health Check (`/health-check`)
 
 ### Что это?
 Красивая визуальная страница для мониторинга здоровья системы в реальном времени.

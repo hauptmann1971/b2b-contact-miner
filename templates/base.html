@@ -1,14 +1,31 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-default-theme="{{ default_theme|default('light') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}B2B Contact Miner{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/themes.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+    <div class="theme-bar container">
+        <button type="button" class="theme-toggle-btn" data-theme-choice="light">Светлая</button>
+        <button type="button" class="theme-toggle-btn" data-theme-choice="dark">Тёмная</button>
+        {% if is_authenticated %}
+        <span class="session-badge">{{ auth_display_name }}</span>
+        {% if auth_can_logout %}
+        <form method="POST" action="{{ url_for('auth_logout') }}" class="inline-form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="theme-toggle-btn">Выйти</button>
+        </form>
+        {% endif %}
+        {% elif telegram_auth_enabled or admin_credentials_configured %}
+        <a href="{{ url_for('login_page', next=request.path) }}" class="theme-toggle-btn">Войти</a>
+        {% endif %}
+    </div>
     {% block content %}{% endblock %}
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

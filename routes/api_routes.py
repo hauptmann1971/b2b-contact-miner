@@ -7,17 +7,16 @@ from sqlalchemy import desc
 
 from models.database import Contact, CrawlLog, DomainContact, Keyword, SearchResult, SessionLocal
 from services.export_service import ExportService
-from utils.web_security import admin_auth_enabled, admin_auth_required
+from utils.tenant_context import get_request_context_or_raise, scoped_query
+from utils.web_security import auth_enabled, owner_required, viewer_required
 from utils.web_stats import get_contact_type_counts
 
 
 def register_api_routes(app, logger):
     @app.route("/api/llm-data")
-    @admin_auth_required
+    @owner_required
     def api_llm_data():
-        # When admin HTTP Basic auth is enabled, that is sufficient for this endpoint (browser sends credentials on same-origin fetch).
-        # If admin auth is disabled, require LLM_DATA_API_TOKEN so the API is not accidentally public.
-        if not admin_auth_enabled():
+        if not auth_enabled():
             expected_token = os.getenv("LLM_DATA_API_TOKEN")
             provided_token = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
             if not expected_token or provided_token != expected_token:
@@ -44,12 +43,16 @@ def register_api_routes(app, logger):
 
         db = SessionLocal()
         try:
-            total_search_results = db.query(SearchResult).count()
-            total_crawl_logs = db.query(CrawlLog).count()
-            llm_used_count = db.query(CrawlLog).filter(CrawlLog.llm_model.isnot(None)).count()
-            domains_with_contacts = db.query(DomainContact).filter(DomainContact.contacts_json.isnot(None)).count()
+            ctx = get_request_context_or_raise()
+            sr_q = scoped_query(db, SearchResult, ctx)
+            crawl_q = scoped_query(db, CrawlLog, ctx)
+            dc_q = scoped_query(db, DomainContact, ctx)
+            total_search_results = sr_q.count()
+            total_crawl_logs = crawl_q.count()
+            llm_used_count = crawl_q.filter(CrawlLog.llm_model.isnot(None)).count()
+            domains_with_contacts = dc_q.filter(DomainContact.contacts_json.isnot(None)).count()
 
-            search_results = db.query(SearchResult).order_by(desc(SearchResult.id)).limit(50).all()
+            search_results = sr_q.order_by(desc(SearchResult.id)).limit(50).all()
             search_results_data = [
                 {
                     "id": sr.id,
@@ -61,13 +64,13 @@ def register_api_routes(app, logger):
                 for sr in search_results
             ]
 
-            crawl_logs = db.query(CrawlLog).filter(CrawlLog.llm_model.isnot(None)).order_by(desc(CrawlLog.id)).limit(50).all()
+            crawl_logs = crawl_q.filter(CrawlLog.llm_model.isnot(None)).order_by(desc(CrawlLog.id)).limit(50).all()
             crawl_logs_data = [
                 {"id": log.id, "domain": log.domain, "llm_model": log.llm_model, "llm_request": _sanitize(log.llm_request), "llm_response": _sanitize(log.llm_response)}
                 for log in crawl_logs
             ]
 
-            domain_contacts = db.query(DomainContact).filter(DomainContact.contacts_json.isnot(None)).order_by(desc(DomainContact.id)).limit(50).all()
+            domain_contacts = dc_q.filter(DomainContact.contacts_json.isnot(None)).order_by(desc(DomainContact.id)).limit(50).all()
             contacts_json_data = [{"id": dc.id, "domain": dc.domain, "contacts_json": _sanitize(dc.contacts_json)} for dc in domain_contacts]
 
             return jsonify(
@@ -102,25 +105,29 @@ def register_api_routes(app, logger):
         )
 
     @app.route("/api/stats")
+    @viewer_required
     def api_stats():
         db = SessionLocal()
         try:
+            ctx = get_request_context_or_raise()
             stats = {
-                "total_keywords": db.query(Keyword).count(),
-                "processed_keywords": db.query(Keyword).filter(Keyword.is_processed.is_(True)).count(),
-                "total_domains": db.query(DomainContact).count(),
-                "total_contacts": db.query(Contact).count(),
-                "contacts_by_type": get_contact_type_counts(db),
+                "total_keywords": scoped_query(db, Keyword, ctx).count(),
+                "processed_keywords": scoped_query(db, Keyword, ctx).filter(Keyword.is_processed.is_(True)).count(),
+                "total_domains": scoped_query(db, DomainContact, ctx).count(),
+                "total_contacts": scoped_query(db, Contact, ctx).count(),
+                "contacts_by_type": get_contact_type_counts(db, tenant_id=ctx.tenant_id),
             }
             return jsonify(stats)
         finally:
             db.close()
 
     @app.route("/api/keywords")
+    @viewer_required
     def api_keywords():
         db = SessionLocal()
         try:
-            keywords = db.query(Keyword).order_by(desc(Keyword.created_at)).all()
+            ctx = get_request_context_or_raise()
+            keywords = scoped_query(db, Keyword, ctx).order_by(desc(Keyword.created_at)).all()
             return jsonify(
                 [
                     {
@@ -139,10 +146,12 @@ def register_api_routes(app, logger):
             db.close()
 
     @app.route("/api/export/flat-csv")
+    @viewer_required
     def export_flat_csv():
         db = SessionLocal()
         try:
-            csv_data = ExportService(db).export_to_flat_csv()
+            ctx = get_request_context_or_raise()
+            csv_data = ExportService(db, tenant_id=ctx.tenant_id).export_to_flat_csv()
             return Response(csv_data, mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=contacts_flat.csv"})
         except Exception as e:
             logger.error(f"Export failed: {e}")
@@ -151,7 +160,7 @@ def register_api_routes(app, logger):
             db.close()
 
     @app.route("/metrics/pipeline")
-    @admin_auth_required
+    @owner_required
     def pipeline_metrics_proxy():
         """Proxy pipeline metrics from monitoring service to Flask app."""
         try:

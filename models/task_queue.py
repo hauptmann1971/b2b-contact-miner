@@ -19,7 +19,8 @@ class TaskQueue(Base):
     max_retries = Column(Integer, default=3, comment="Maximum retry attempts allowed")
     error_message = Column(Text, nullable=True, comment="Error message if task failed")
     result = Column(Text, nullable=True, comment="JSON serialized task result/output")  # JSON serialized result
-    keyword_id = Column(Integer, nullable=True, index=True, comment="Associated keyword ID for tracking")  # Link to keyword for tracking
+    keyword_id = Column(Integer, nullable=True, index=True, comment="Associated keyword ID for tracking")
+    tenant_id = Column(Integer, nullable=True, index=True, comment="Owning tenant")
     depends_on_task_id = Column(Integer, ForeignKey('task_queue.id'), nullable=True, index=True, comment="Parent task ID - this task waits for parent completion")  # Parent task dependency
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True, comment="Task creation timestamp")
     started_at = Column(DateTime, nullable=True, comment="Task execution start timestamp")

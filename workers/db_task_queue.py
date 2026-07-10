@@ -148,6 +148,11 @@ class DatabaseTaskQueue:
         
         try:
             db = SessionLocal()
+            tenant_id = payload.get("tenant_id") if isinstance(payload, dict) else None
+            if tenant_id is None:
+                from utils.tenant_workers import tenant_id_for_keyword
+
+                tenant_id = tenant_id_for_keyword(db, keyword_id)
             task = TaskQueue(
                 task_name=task_name,
                 task_type=task_type,
@@ -155,6 +160,7 @@ class DatabaseTaskQueue:
                 priority=priority,
                 max_retries=max_retries,
                 keyword_id=keyword_id,
+                tenant_id=tenant_id,
                 depends_on_task_id=depends_on_task_id,
                 scheduled_for=scheduled_for,
                 status='pending'
@@ -386,7 +392,9 @@ class DatabaseTaskQueue:
                 ).first()
                 if sr:
                     return sr
+                keyword_obj = db.query(Keyword).filter(Keyword.id == keyword_id).first()
                 sr = SearchResult(
+                    tenant_id=keyword_obj.tenant_id if keyword_obj else None,
                     keyword_id=keyword_id,
                     url=candidate_url,
                     title=result.get("title"),
@@ -613,11 +621,11 @@ class DatabaseTaskQueue:
         # Save to database
         db = SessionLocal()
         try:
+            keyword_obj = db.query(Keyword).filter(Keyword.id == keyword_id).first() if keyword_id else None
             # Determine tags (hybrid approach: keyword + LLM classification)
             tags = []
             try:
                 # 1. Get keyword text as base tag
-                keyword_obj = db.query(Keyword).filter(Keyword.id == keyword_id).first()
                 if keyword_obj:
                     tags.append(keyword_obj.keyword)
                     logger.info(f"Added keyword as tag: {keyword_obj.keyword}")
@@ -671,8 +679,10 @@ class DatabaseTaskQueue:
                 "social": contacts.social_links if hasattr(contacts, "social_links") else {},
             }
             extraction_method = "llm" if llm_data else "regex"
+            keyword_tenant_id = keyword_obj.tenant_id if keyword_obj else None
 
             domain_contact = DomainContact(
+                tenant_id=keyword_tenant_id,
                 search_result_id=search_result_id,
                 domain=domain,
                 tags=tags,
@@ -686,6 +696,7 @@ class DatabaseTaskQueue:
             # Create normalized Contact records
             for email in contacts.emails:
                 contact = Contact(
+                    tenant_id=keyword_tenant_id,
                     domain_contact_id=domain_contact.id,
                     contact_type=ContactType.EMAIL,
                     value=email
@@ -694,6 +705,7 @@ class DatabaseTaskQueue:
             
             for tg in contacts.telegram_links:
                 contact = Contact(
+                    tenant_id=keyword_tenant_id,
                     domain_contact_id=domain_contact.id,
                     contact_type=ContactType.TELEGRAM,
                     value=tg
@@ -702,6 +714,7 @@ class DatabaseTaskQueue:
             
             for li in contacts.linkedin_links:
                 contact = Contact(
+                    tenant_id=keyword_tenant_id,
                     domain_contact_id=domain_contact.id,
                     contact_type=ContactType.LINKEDIN,
                     value=li
@@ -720,6 +733,7 @@ class DatabaseTaskQueue:
                     continue
                 for link in links:
                     contact = Contact(
+                        tenant_id=keyword_tenant_id,
                         domain_contact_id=domain_contact.id,
                         contact_type=mapped_type,
                         value=link

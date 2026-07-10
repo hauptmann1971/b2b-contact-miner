@@ -9,25 +9,38 @@ from datetime import datetime, timezone
 
 
 class KeywordService:
-    def __init__(self, db_session: Session):
+    def __init__(self, db_session: Session, tenant_id: int | None = None):
         self.db = db_session
+        self.tenant_id = tenant_id
         self.translator = TranslationService()
     
-    def add_keyword(self, keyword_data: KeywordInput) -> Keyword:
+    def add_keyword(
+        self,
+        keyword_data: KeywordInput,
+        tenant_id: int | None = None,
+        created_by_user_id: int | None = None,
+    ) -> Keyword:
         """Add a new keyword with automatic translation to target languages"""
-        existing = self.db.query(Keyword).filter(
+        tid = tenant_id if tenant_id is not None else self.tenant_id
+        query = self.db.query(Keyword).filter(
             Keyword.keyword == keyword_data.keyword,
-            Keyword.language == keyword_data.language
-        ).first()
+            Keyword.language == keyword_data.language,
+            Keyword.country == keyword_data.country,
+        )
+        if tid is not None:
+            query = query.filter(Keyword.tenant_id == tid)
+        existing = query.first()
         
         if existing:
             logger.warning(f"Keyword already exists: {keyword_data.keyword}")
             return existing
         
         keyword = Keyword(
+            tenant_id=tid,
+            created_by_user_id=created_by_user_id,
             keyword=keyword_data.keyword,
             language=keyword_data.language,
-            country=keyword_data.country
+            country=keyword_data.country,
         )
         
         self.db.add(keyword)
@@ -91,9 +104,13 @@ class KeywordService:
             self.db.commit()
             logger.info(f"Marked keyword {keyword_id} as processed")
     
-    def get_existing_keywords(self) -> List[Dict]:
+    def get_existing_keywords(self, tenant_id: int | None = None) -> List[Dict]:
         """Get list of already processed keywords (readonly view)"""
-        keywords = self.db.query(Keyword).all()
+        tid = tenant_id if tenant_id is not None else self.tenant_id
+        query = self.db.query(Keyword)
+        if tid is not None:
+            query = query.filter(Keyword.tenant_id == tid)
+        keywords = query.all()
         return [
             {
                 "id": k.id,

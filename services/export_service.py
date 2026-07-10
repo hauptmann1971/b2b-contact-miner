@@ -8,8 +8,9 @@ from loguru import logger
 
 
 class ExportService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
     
     def export_to_flat_csv(self, filters: dict = None) -> str:
         """Export contacts to flat CSV format with keyword info"""
@@ -69,6 +70,8 @@ class ExportService:
             .join(Keyword, SearchResult.keyword_id == Keyword.id)
             .join(Contact, Contact.domain_contact_id == DomainContact.id)
         )
+        if self.tenant_id is not None:
+            query = query.filter(Keyword.tenant_id == self.tenant_id)
         
         if filters:
             if "keyword_id" in filters:

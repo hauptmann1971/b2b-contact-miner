@@ -1,9 +1,9 @@
 # Documentation index
 
-Central index for `doc/`. Prefer **Active** docs for production and onboarding. **Historical** docs are kept for context but may describe removed components (Redis queue, self-hosted SonarQube, GigaChat, old `task_worker.py`).
+Central index for `doc/`. **Historical** material lives in [`archive/doc/`](../archive/doc/) (gitignored locally).
 
-**Scripts & ops:** [scripts/README.md](../scripts/README.md) — production ops, cron, deploy.  
-**Getters / checkers:** [getters/README.md](../getters/README.md), [checkers/README.md](../checkers/README.md).
+**Scripts & ops:** [scripts/README.md](../scripts/README.md)  
+**Getters / checkers:** [getters/README.md](../getters/README.md), [checkers/README.md](../checkers/README.md)
 
 **Commit messages:** use **English** in git (project convention).
 
@@ -18,8 +18,9 @@ Central index for `doc/`. Prefer **Active** docs for production and onboarding. 
 | [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md) | Short system overview |
 | [C4_ARCHITECTURE.md](C4_ARCHITECTURE.md) | C4 diagrams (Mermaid) |
 | [HOW_IT_WORKS.md](HOW_IT_WORKS.md) | Plain-language pipeline walkthrough |
-| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Tables and fields |
-| [TASK_QUEUE.md](TASK_QUEUE.md) | MySQL `task_queue` — current behavior |
+| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Tables and fields (incl. multi-tenant) |
+| [TASK_QUEUE.md](TASK_QUEUE.md) | MySQL `task_queue` |
+| [AUTH_MULTITENANT.md](AUTH_MULTITENANT.md) | Login, roles, tenants, user admin |
 
 ### Deploy & runtime
 
@@ -28,8 +29,7 @@ Central index for `doc/`. Prefer **Active** docs for production and onboarding. 
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Server deployment |
 | [GITHUB_SECRETS_DEPLOY.md](GITHUB_SECRETS_DEPLOY.md) | GitHub Actions secrets |
 | [STARTUP_GUIDE.md](STARTUP_GUIDE.md) | Start web + pipeline |
-| [WEB_SERVER_GUIDE.md](WEB_SERVER_GUIDE.md) | Flask UI |
-| [WEB_SERVER_QUICKSTART.md](WEB_SERVER_QUICKSTART.md) | Quick UI start |
+| [WEB_SERVER_GUIDE.md](WEB_SERVER_GUIDE.md) | Flask UI + auth |
 | [MONITORING_GUIDE.md](MONITORING_GUIDE.md) | Health, metrics, alerts |
 | [MONITORING_CHEATSHEET.md](MONITORING_CHEATSHEET.md) | Command cheat sheet |
 | [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | Common commands |
@@ -50,51 +50,24 @@ Central index for `doc/`. Prefer **Active** docs for production and onboarding. 
 
 | Doc | Content |
 |-----|---------|
-| [KEYWORDS_GUIDE.md](KEYWORDS_GUIDE.md) | Keywords in DB (manual per row; optional `generate_translations`) |
+| [KEYWORDS_GUIDE.md](KEYWORDS_GUIDE.md) | Keywords in DB |
 | [CONTACT_EXTRACTION_METHODS.md](CONTACT_EXTRACTION_METHODS.md) | Regex / LLM extraction |
 | [HOW_CONTENT_GOES_TO_LLM.md](HOW_CONTENT_GOES_TO_LLM.md) | LLM payload |
 | [RUN_TESTS_GUIDE.md](RUN_TESTS_GUIDE.md) | `pytest tests/` |
 | [HYBRID_TAG_SYSTEM.md](HYBRID_TAG_SYSTEM.md) | Tags on contacts |
-| [NEW_PAGES_GUIDE.md](NEW_PAGES_GUIDE.md) | UI pages |
+| [NEW_PAGES_GUIDE.md](NEW_PAGES_GUIDE.md) | UI pages map |
 
 ### Config files in `doc/`
 
-- `docker-compose.yml` — local MySQL (+ optional Redis container; app queue is **MySQL**, not Redis)
+- `docker-compose.yml` — local MySQL (optional Redis container; app queue is **MySQL**)
 - `setup_mysql.sql` — DB bootstrap
 
 ---
 
-## Historical (archive)
+## Archive
 
-May reference **Redis task queue**, **self-hosted SonarQube**, **GigaChat**, or **`workers/task_worker.py`** — no longer used.
-
-| Doc | Why archived |
-|-----|----------------|
-| [SONARQUBE_SETUP.md](SONARQUBE_SETUP.md) | Self-hosted SonarQube → use SonarCloud |
-| `sonarqube-docker-compose.yml` | Same |
-| [REDIS_SETUP.md](REDIS_SETUP.md) | Optional Redis container; app queue is MySQL |
-| [DB_TASK_QUEUE_SETUP.md](DB_TASK_QUEUE_SETUP.md) | One-time migration checklist (done) |
-| [ASYNC_PIPELINE_MIGRATION.md](ASYNC_PIPELINE_MIGRATION.md) | Migration notes (done) |
-| [MIGRATION_COMPLETE.md](MIGRATION_COMPLETE.md) | Migration completion note |
-| [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) | Old implementation log |
-| [БЫСТРЫЙ_СТАРТ_ASYNC.md](БЫСТРЫЙ_СТАРТ_ASYNC.md) | Old async quick start |
-| [БЫСТРЫЙ_СТАРТ.md](БЫСТРЫЙ_СТАРТ.md) | Superseded by STARTUP_GUIDE |
-| [GIGACHAT_SETUP.md](GIGACHAT_SETUP.md) | GigaChat not in current code |
-| [SETUP_COMPLETE.md](SETUP_COMPLETE.md) | One-time setup snapshot |
-| [VENV_SETUP_REPORT.md](VENV_SETUP_REPORT.md) | Old venv report |
-| [TEST_REPORT.md](TEST_REPORT.md) | Old test snapshot |
-| [STARTUP_IMPROVEMENTS.md](STARTUP_IMPROVEMENTS.md) | Old improvement notes |
-| [IMPROVEMENTS.md](IMPROVEMENTS.md) | Old improvement list |
-| [README_УЛУЧШЕНИЯ.md](README_УЛУЧШЕНИЯ.md) | Old improvements (RU) |
-| [FINAL_STEPS.md](FINAL_STEPS.md) | Old checklist |
-| [QUICKSTART_VENV.md](QUICKSTART_VENV.md) | Overlaps STARTUP_GUIDE |
-| [STARTUP_SCRIPTS_GUIDE.md](STARTUP_SCRIPTS_GUIDE.md) | `deploy/start_all*` (dev convenience) |
-| [RELIABILITY_IMPROVEMENTS.md](RELIABILITY_IMPROVEMENTS.md) | Design notes (partially implemented) |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Old sync pipeline (RU); superseded by HOW_IT_WORKS |
-| [DIAGRAMS.md](DIAGRAMS.md) | Extra diagrams — verify against code |
-| [LLM_PROMPT_EXAMPLE.md](LLM_PROMPT_EXAMPLE.md) | Example only |
-| [FIX_YANDEXGPT_403.md](FIX_YANDEXGPT_403.md) | Troubleshooting snapshot |
-| [CHANGELOG.md](CHANGELOG.md) | Changelog (not always updated) |
+Superseded docs, old migration notes, duplicate quickstarts → [`archive/doc/`](../archive/doc/).  
+See [`archive/README.md`](../archive/README.md).
 
 ---
 
@@ -102,15 +75,16 @@ May reference **Redis task queue**, **self-hosted SonarQube**, **GigaChat**, or 
 
 | Path | Notes |
 |------|--------|
-| `doc/sonarcloud_reports/` | Output of `scripts/download_sonar_report.py` (in `.gitignore`) |
+| `doc/sonarcloud_reports/` | Output of `scripts/download_sonar_report.py` |
+| `archive/` | Local superseded files (see `archive/README.md`) |
+| `data/app_settings.json` | Theme default (passwords use `users` table) |
 
 ---
 
 ## Quick links
 
 - [How it works →](HOW_IT_WORKS.md)
+- [Auth & tenants →](AUTH_MULTITENANT.md)
 - [Task queue →](TASK_QUEUE.md)
 - [Deploy →](DEPLOYMENT_GUIDE.md)
-- [Yandex SERP →](YANDEX_SEARCH_SETUP.md)
 - [Scripts & ops →](../scripts/README.md)
-- [Run tests →](RUN_TESTS_GUIDE.md) (CI: `.github/workflows/tests.yml`)

@@ -94,7 +94,7 @@ graph TB
 | Container | Role |
 |-----------|------|
 | **Nginx** | Public HTTP; proxies to Flask only (no `:8000` in prod nginx config) |
-| **Flask UI** | Keywords, contacts, admin actions, `/health` (DB ping) |
+| **Flask UI** | Keywords, contacts, admin actions, `/health` (DB ping), session auth, `/admin/users` |
 | **Pipeline process** | `ContactMiningPipeline.run_pipeline()` — preflight, enqueue searches, wait for queue |
 | **DB task workers** | In-process asyncio pool (`MAX_CONCURRENT_DOMAINS`, default 12); handlers call services |
 | **MySQL** | `keywords`, `search_results`, `domain_contacts`, `contacts`, `task_queue`, `pipeline_state`, `crawl_logs`, … |

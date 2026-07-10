@@ -64,8 +64,8 @@ Use on the server when debugging queue, SERP, or keywords. Safe to re-run; read 
 |--------|---------|
 | `refresh_yandex_token.py` | Refresh IAM in `.env` |
 | `exchange_oauth_token.py` | OAuth → IAM exchange |
-| `test_yandex_token.py` | Quick IAM check |
-| `test_yandex_search.py` | Yandex Search API smoke test |
+
+Yandex smoke tests: `checkers/test_yandex_search.py`, `checkers/test_yandex_token.py`.
 
 Prefer **`getters/`** for first-time IAM setup: `getters/get_iam_from_oauth.py`, `getters/update_iam_token.py` (see [getters/README.md](../getters/README.md)).
 
@@ -101,10 +101,10 @@ GitHub Actions deploy: `.github/workflows/deploy.yml`. Server helper: `deploy/de
 
 | Script | Purpose |
 |--------|---------|
-| `test_async_pipeline.py` | Queue integration smoke |
 | `export_flat.py` | Flat CSV export → `contacts_export.csv` (gitignored) |
 | `export_for_llm_test.py` | Sample pages for LLM experiments |
-| `rewrite_ru_commit_messages.py` | One-time `git filter-branch` helper (legacy commit messages) |
+
+Ad-hoc dev scripts moved to `archive/scripts-dev/` (gitignored).
 
 **Smoke / component tests:** [checkers/README.md](../checkers/README.md) (`smoke_pipeline_quality.py`, `run_weekly_smoke.py`, …).
 
@@ -114,6 +114,6 @@ GitHub Actions deploy: `.github/workflows/deploy.yml`. Server helper: `deploy/de
 
 ## Related docs
 
-- Index: [doc/README.md](../doc/README.md) (active vs historical)
+- Index: [doc/README.md](../doc/README.md)
 - Deploy: [doc/DEPLOYMENT_GUIDE.md](../doc/DEPLOYMENT_GUIDE.md), [doc/YANDEX_SEARCH_SETUP.md](../doc/YANDEX_SEARCH_SETUP.md)
-- Queue: [doc/DB_TASK_QUEUE_SETUP.md](../doc/DB_TASK_QUEUE_SETUP.md)
+- Queue: [doc/TASK_QUEUE.md](../doc/TASK_QUEUE.md)

@@ -23,11 +23,9 @@ deploy\start_all.bat
 ```
 
 ### Auto Deploy to Server
-```powershell
-.\deploy\auto_deploy.ps1
-```
 
-Automatically deploys code to remote server via SSH.
+Legacy `auto_deploy.ps1` moved to `archive/deploy-ops/` (gitignored).  
+Use GitHub Actions [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) or `deploy/deploy.sh` on the server.
 
 ## Linux Deployment
 
@@ -56,18 +54,10 @@ Complete setup and startup script that:
 - Starts FastAPI monitoring service
 - Provides next steps for running the main pipeline
 
-### auto_deploy.ps1
-Automated deployment to remote server:
-- Syncs code via git
-- Updates dependencies
-- Restarts services
-- Requires SSH key authentication
-
 ### deploy.sh
-Manual deployment helper:
-- Shows step-by-step instructions
-- Provides commands for remote server management
-- Includes troubleshooting tips
+Manual deployment helper on the server (git pull, venv, supervisor).
+
+One-off repair scripts (multitenant fix, user inspect) → `archive/deploy-ops/`.
 
 ## Prerequisites
 
@@ -83,8 +73,9 @@ Make sure to set up your environment variables before running:
 
 ```env
 DATABASE_URL=mysql+pymysql://user:pass@host:3306/db
-REDIS_URL=redis://localhost:6379/0
-# ... other settings
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=...
+# Task queue is MySQL (task_queue table), not Redis
 ```
 
 ## Troubleshooting

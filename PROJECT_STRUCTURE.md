@@ -1,7 +1,8 @@
 # B2B Contact Miner — Project Structure
 
-> **Doc index:** [doc/README.md](doc/README.md) (active vs historical).  
-> **Architecture:** [doc/HOW_IT_WORKS.md](doc/HOW_IT_WORKS.md), [doc/C4_ARCHITECTURE.md](doc/C4_ARCHITECTURE.md).
+> **Doc index:** [doc/README.md](doc/README.md)  
+> **Architecture:** [doc/HOW_IT_WORKS.md](doc/HOW_IT_WORKS.md), [doc/C4_ARCHITECTURE.md](doc/C4_ARCHITECTURE.md)  
+> **Auth:** [doc/AUTH_MULTITENANT.md](doc/AUTH_MULTITENANT.md)
 
 ## Root layout
 
@@ -19,6 +20,7 @@ b2b-contact-miner/
 │
 ├── models/
 │   ├── database.py         # SQLAlchemy models (keywords, contacts, …)
+│   ├── tenant.py           # tenants, users, roles
 │   ├── task_queue.py       # task_queue table model
 │   └── schemas.py          # Pydantic DTOs
 │
@@ -28,18 +30,22 @@ b2b-contact-miner/
 │   ├── extraction_service.py
 │   ├── keyword_service.py
 │   ├── export_service.py
-│   └── translation_service.py
+│   ├── translation_service.py
+│   ├── auth_service.py
+│   ├── tenant_bootstrap.py
+│   └── user_admin_service.py
 │
 ├── workers/
 │   └── db_task_queue.py    # MySQL-backed async workers + handlers
 │
-├── routes/                 # Flask blueprints (registered by web_server.py)
+├── routes/
 │   ├── user_routes.py
+│   ├── auth_routes.py
 │   ├── admin_routes.py
 │   ├── api_routes.py
 │   └── health_routes.py
 │
-├── utils/                  # SERP filters, http_fetch, web_stats, state_manager, …
+├── utils/                  # SERP filters, http_fetch, web_security, tenant_context, …
 ├── monitoring/
 │   └── healthcheck.py      # FastAPI health / queue metrics (:8000)
 │
@@ -47,12 +53,13 @@ b2b-contact-miner/
 ├── static/                 # CSS / JS
 │
 ├── scripts/                # Ops, cron, exports — see scripts/README.md
-├── getters/                # CLI: add keywords, view results — getters/README.md
+├── getters/                # CLI: add keywords, view results
 ├── checkers/               # Smoke / manual checks — checkers/README.md
 ├── tests/                  # pytest suite
 ├── migrations/             # SQL + apply_*.py
 ├── deploy/                 # nginx, start_all*, deploy.sh
-└── doc/                    # Documentation index
+├── doc/                    # Active documentation
+└── archive/                # Superseded local files (gitignored, see archive/README.md)
 ```
 
 There is **no** `src/` package — modules live at repo root (PYTHONPATH = project root).
@@ -79,6 +86,7 @@ Task queue is **MySQL** (`task_queue` table), not Redis.
 ## Quick links
 
 - [How it works](doc/HOW_IT_WORKS.md)
+- [Auth & tenants](doc/AUTH_MULTITENANT.md)
 - [Task queue](doc/TASK_QUEUE.md)
 - [Scripts](scripts/README.md)
 - [Run tests](doc/RUN_TESTS_GUIDE.md)

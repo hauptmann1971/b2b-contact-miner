@@ -43,7 +43,9 @@ class Keyword(Base):
     __tablename__ = "keywords"
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
-    keyword = Column(String(500), unique=True, nullable=False, index=True, comment="Search query text")
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True, comment="Owning tenant")
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="User who added keyword")
+    keyword = Column(String(500), nullable=False, comment="Search query text")
     language = Column(String(10), nullable=False, default="ru", comment="Language code (ru, en, etc.)")
     country = Column(String(5), nullable=False, default="RU", comment="Country code (RU, US, etc.)")
     is_processed = Column(Boolean, default=False, comment="True if keyword has been fully processed")
@@ -53,12 +55,17 @@ class Keyword(Base):
     
     searches = relationship("SearchResult", back_populates="keyword")
 
+    __table_args__ = (
+        Index("idx_keywords_tenant_keyword", "tenant_id", "keyword", "language", "country", unique=True),
+    )
+
 
 class SearchResult(Base):
     """SERP search results for a keyword"""
     __tablename__ = "search_results"
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True, comment="Owning tenant")
     keyword_id = Column(Integer, ForeignKey("keywords.id"), nullable=False, comment="Foreign key to keywords table")
     url = Column(String(768), nullable=False, index=True, comment="Website URL from search results")  # Reduced for MySQL index limit (768 * 4 bytes = 3072)
     title = Column(String(1000), comment="Page title from SERP")
@@ -82,6 +89,7 @@ class DomainContact(Base):
     __tablename__ = "domain_contacts"
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True, comment="Owning tenant")
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=False, comment="Foreign key to search_results table")
     domain = Column(String(500), nullable=False, index=True, comment="Domain name (e.g., example.com)")
     tags = Column(JSON, default=list, comment="Tags/categories extracted from website")
@@ -106,6 +114,7 @@ class Contact(Base):
     __tablename__ = "contacts"
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True, comment="Owning tenant")
     domain_contact_id = Column(Integer, ForeignKey("domain_contacts.id"), nullable=False, comment="Foreign key to domain_contacts table")
     contact_type = Column(Enum(ContactType), nullable=False, comment="Type: email, telegram, linkedin, phone, x, facebook, instagram, youtube")
     value = Column(String(500), nullable=False, index=True, comment="Contact value (email address, phone number, etc.)")
@@ -127,6 +136,7 @@ class CrawlLog(Base):
     __tablename__ = "crawl_logs"
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True, comment="Owning tenant")
     domain = Column(String(500), nullable=False, index=True, comment="Domain that was crawled")
     url = Column(String(2000), comment="Specific URL crawled")
     status_code = Column(Integer, comment="HTTP status code (200, 404, 500, etc.)")
@@ -144,6 +154,7 @@ class PipelineState(Base):
     __tablename__ = "pipeline_state"
     
     id = Column(Integer, primary_key=True, autoincrement=True, comment=_COMMENT_ID)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True, comment="Owning tenant")
     # Same run_id is shared across multiple rows (run header + per-keyword checkpoints); must not be UNIQUE.
     run_id = Column(String(100), nullable=False, index=True, comment="Pipeline run identifier (shared across checkpoints)")
     keyword_id = Column(Integer, ForeignKey("keywords.id"), comment="Current keyword being processed")
@@ -159,4 +170,8 @@ class PipelineState(Base):
 
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    import models.tenant  # noqa: F401
+    from services.tenant_bootstrap import bootstrap_default_tenant, ensure_multitenant_schema
+
+    ensure_multitenant_schema()
+    bootstrap_default_tenant()

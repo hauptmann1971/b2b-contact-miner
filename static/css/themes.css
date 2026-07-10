@@ -1,0 +1,205 @@
+:root,
+[data-theme="light"] {
+    --page-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --page-text: #1f2937;
+    --header-bg: #ffffff;
+    --header-text: #667eea;
+    --header-subtitle: #666666;
+    --card-bg: #ffffff;
+    --card-border: rgba(0, 0, 0, 0.08);
+    --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+    --panel-bg: #ffffff;
+    --panel-border: rgba(0, 0, 0, 0.08);
+    --panel-title: #667eea;
+    --muted-text: #666666;
+    --link-bg: #f3f4f6;
+    --link-text: #374151;
+    --link-border: #e5e7eb;
+    --btn-bg: #667eea;
+    --btn-text: #ffffff;
+    --btn-secondary-bg: #f3f4f6;
+    --btn-secondary-text: #374151;
+    --table-border: #e5e7eb;
+    --input-bg: #ffffff;
+    --input-border: #d1d5db;
+    --flash-success-bg: #d4edda;
+    --flash-success-text: #155724;
+    --flash-error-bg: #f8d7da;
+    --flash-error-text: #721c24;
+}
+
+[data-theme="dark"] {
+    --page-bg: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    --page-text: #e5e7eb;
+    --header-bg: #0f172a;
+    --header-text: #60a5fa;
+    --header-subtitle: #94a3b8;
+    --card-bg: #0f172a;
+    --card-border: #334155;
+    --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --panel-bg: #0f172a;
+    --panel-border: #334155;
+    --panel-title: #93c5fd;
+    --muted-text: #94a3b8;
+    --link-bg: #1e293b;
+    --link-text: #e5e7eb;
+    --link-border: #334155;
+    --btn-bg: #1d4ed8;
+    --btn-text: #ffffff;
+    --btn-secondary-bg: #1e293b;
+    --btn-secondary-text: #e5e7eb;
+    --table-border: #1e293b;
+    --input-bg: #111827;
+    --input-border: #334155;
+    --flash-success-bg: #14532d;
+    --flash-success-text: #bbf7d0;
+    --flash-error-bg: #7f1d1d;
+    --flash-error-text: #fecaca;
+}
+
+body {
+    background: var(--page-bg);
+    color: var(--page-text);
+}
+
+header,
+.stat-card,
+.card,
+.panel,
+.login-card {
+    background: var(--header-bg);
+    color: var(--page-text);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--card-shadow);
+}
+
+h1,
+.stat-value,
+.panel h2 {
+    color: var(--header-text);
+}
+
+.subtitle,
+.stat-label,
+.muted,
+.text-muted {
+    color: var(--muted-text);
+}
+
+.menu a,
+.back-link,
+.btn {
+    background: var(--link-bg);
+    color: var(--link-text);
+    border: 1px solid var(--link-border);
+}
+
+.btn-primary {
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border-color: var(--btn-bg);
+}
+
+.panel {
+    background: var(--panel-bg);
+    border-color: var(--panel-border);
+}
+
+.panel h2 {
+    color: var(--panel-title);
+}
+
+table th,
+table td {
+    border-bottom: 1px solid var(--table-border);
+}
+
+input[type="password"],
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+    background: var(--input-bg);
+    color: var(--page-text);
+    border: 1px solid var(--input-border);
+}
+
+.flash-success,
+.flash-success {
+    background: var(--flash-success-bg);
+    color: var(--flash-success-text);
+}
+
+.flash-error {
+    background: var(--flash-error-bg);
+    color: var(--flash-error-text);
+}
+
+.theme-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.theme-toggle-btn {
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--link-border);
+    background: var(--link-bg);
+    color: var(--link-text);
+}
+
+.theme-toggle-btn.is-active {
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border-color: var(--btn-bg);
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.settings-form label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--muted-text);
+}
+
+.settings-form input,
+.settings-form select {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.login-card {
+    max-width: 480px;
+    margin: 40px auto;
+    padding: 32px;
+    border-radius: 16px;
+    text-align: center;
+}
+
+.login-card h1 {
+    margin-bottom: 8px;
+}
+
+.login-card p {
+    color: var(--muted-text);
+    margin-bottom: 20px;
+}
+
+.session-badge {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--link-bg);
+    border: 1px solid var(--link-border);
+    font-size: 0.9em;
+    margin-left: 8px;
+}

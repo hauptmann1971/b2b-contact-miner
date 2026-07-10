@@ -1,40 +1,96 @@
-import pytest
-import sys
 import os
 
-# Add project root to Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import pytest
+from werkzeug.security import generate_password_hash
+
+from models.database import SessionLocal
+from models.tenant import Tenant, User, UserRole
+from services.tenant_bootstrap import bootstrap_default_tenant, ensure_multitenant_schema
+
+
+def _ensure_test_owner() -> None:
+    """Guarantee testadmin owner for pytest even when prod owner already exists."""
+    db = SessionLocal()
+    try:
+        slug = os.getenv("DEFAULT_TENANT_SLUG", "test-company").strip() or "test-company"
+        tenant = db.query(Tenant).filter(Tenant.slug == slug).first()
+        if not tenant:
+            tenant = db.query(Tenant).order_by(Tenant.id.asc()).first()
+        if not tenant:
+            tenant = Tenant(slug=slug, name="Test Company", is_active=True)
+            db.add(tenant)
+            db.flush()
+
+        user = db.query(User).filter(User.tenant_id == tenant.id, User.username == "testadmin").first()
+        if not user:
+            user = User(tenant_id=tenant.id, username="testadmin", is_active=True)
+            db.add(user)
+        user.password_hash = generate_password_hash("testpass")
+        user.role = UserRole.OWNER
+        user.telegram_id = 42
+        user.display_name = "Test Admin"
+        user.is_active = True
+        db.commit()
+    finally:
+        db.close()
 
 
 @pytest.fixture
-def sample_html_content():
-    """Sample HTML content for testing"""
-    return """
-    <html>
-    <body>
-        <h1>Contact Us</h1>
-        <p>Email: ceo@company.com</p>
-        <p>Support: support@company.com</p>
-        <a href="mailto:info@company.com">Email Us</a>
-        <a href="https://t.me/company_channel">Telegram</a>
-        <a href="https://linkedin.com/in/john-doe">LinkedIn</a>
-        <p>Phone: +1-234-567-8900</p>
-    </body>
-    </html>
-    """
+def app(monkeypatch, tmp_path):
+    settings_file = tmp_path / "app_settings.json"
+    monkeypatch.setenv("APP_SETTINGS_PATH", str(settings_file))
+    monkeypatch.setenv("ADMIN_USERNAME", "testadmin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "testpass")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123456:ABC-DEF")
+    monkeypatch.setenv("TELEGRAM_BOT_USERNAME", "test_bot")
+    monkeypatch.setenv("ADMIN_TELEGRAM_IDS", "42")
+    monkeypatch.setenv("DEFAULT_TENANT_SLUG", "company")
+    monkeypatch.setenv("DEFAULT_TENANT_NAME", "Company")
+
+    ensure_multitenant_schema()
+    bootstrap_default_tenant()
+    _ensure_test_owner()
+
+    from web_server import app as flask_app
+
+    flask_app.config["TESTING"] = True
+    flask_app.config["SECRET_KEY"] = "test-secret-key"
+    return flask_app
 
 
 @pytest.fixture
-def obfuscated_email_content():
-    """Content with obfuscated emails"""
-    return """
-    Contact us at: ceo[at]company.com
-    Or reach out to: info (at) company (dot) com
-    Telegram: t.me/support
-    """
+def client(app):
+    return app.test_client()
 
 
-@pytest.fixture
-def empty_content():
-    """Empty content for edge case testing"""
-    return ""
+def auth_header(username: str, password: str) -> dict[str, str]:
+    import base64
+
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
+
+
+def login_session(client, username: str = "testadmin", password: str = "testpass"):
+    with client.session_transaction() as sess:
+        if "_csrf_token" not in sess:
+            client.get("/login")
+        csrf = sess.get("_csrf_token")
+    return client.post(
+        "/auth/login",
+        data={"_csrf_token": csrf, "username": username, "password": password, "next": "/user"},
+        follow_redirects=True,
+    )
+
+
+def get_csrf(client) -> str:
+    with client.session_transaction() as sess:
+        if "_csrf_token" not in sess:
+            client.get("/login")
+        return sess.get("_csrf_token")
+
+
+def post_add_keyword(client, **form_fields):
+    login_session(client)
+    csrf = get_csrf(client)
+    data = {"_csrf_token": csrf, "language": "ru", "country": "RU", **form_fields}
+    return client.post("/add_keyword", data=data, follow_redirects=True)

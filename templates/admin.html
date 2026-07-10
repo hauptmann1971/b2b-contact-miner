@@ -15,6 +15,7 @@
                 {"href": url_for('user_workspace'), "label": "User Workspace", "target": ""},
                 {"href": url_for('health_check_page'), "label": "Health UI", "target": ""},
                 {"href": "/metrics/pipeline", "label": "/metrics/pipeline", "target": "_blank"},
+                {"href": url_for('admin_users_page'), "label": "Users", "target": ""},
                 {"href": url_for('llm_data_page'), "label": "LLM Data", "target": ""},
                 {"href": url_for('api_docs_page'), "label": "API Docs", "target": ""}
             ]
@@ -39,6 +40,44 @@
             <div class="muted">
                 Active worker locks: <strong>{{ active_worker_locks }}</strong> |
                 Oldest lock age: <strong>{{ oldest_lock_minutes }}</strong> min
+            </div>
+        {% endcall %}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% call ui.section("⚙️ Настройки", "panel") %}
+            <div class="settings-grid">
+                <form method="POST" action="{{ url_for('admin_change_password') }}" class="settings-form">
+                    <h3>Смена пароля</h3>
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <label for="current_password">Текущий пароль</label>
+                    <input type="password" id="current_password" name="current_password" required autocomplete="current-password">
+                    <label for="new_password">Новый пароль</label>
+                    <input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password">
+                    <label for="confirm_password">Подтверждение</label>
+                    <input type="password" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password">
+                    <button type="submit" class="btn btn-primary">Сохранить пароль</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('admin_change_theme') }}" class="settings-form">
+                    <h3>Тема по умолчанию</h3>
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <label for="theme">Тема для новых посетителей</label>
+                    <select id="theme" name="theme">
+                        <option value="light"{% if default_theme == 'light' %} selected{% endif %}>Светлая</option>
+                        <option value="dark"{% if default_theme == 'dark' %} selected{% endif %}>Тёмная</option>
+                    </select>
+                    <p class="muted">Пользователь может переключить тему вручную — выбор сохраняется в браузере.</p>
+                    <button type="submit" class="btn btn-primary">Сохранить тему</button>
+                </form>
             </div>
         {% endcall %}
 

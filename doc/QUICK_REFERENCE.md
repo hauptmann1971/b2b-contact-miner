@@ -309,7 +309,7 @@ UPDATE keywords SET is_processed = FALSE;
 
 ## 🎓 Learning Resources
 
-- **Architecture**: See `doc/ARCHITECTURE.md`
+- **Architecture**: See `doc/HOW_IT_WORKS.md`, `doc/C4_ARCHITECTURE.md`
 - **API Keys Setup**: See `doc/API_KEYS_SETUP.md`
 - **How It Works**: See `doc/HOW_IT_WORKS.md`
 - **Startup Guide**: See `STARTUP_SCRIPTS_GUIDE.md`

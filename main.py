@@ -236,7 +236,8 @@ class ContactMiningPipeline:
                         'keyword_id': keyword.id,
                         'keyword': keyword.keyword,
                         'language': keyword.language,
-                        'country': keyword.country
+                        'country': keyword.country,
+                        'tenant_id': keyword.tenant_id,
                     },
                     priority=10,  # High priority for search tasks
                     keyword_id=keyword.id

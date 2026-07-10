@@ -10,9 +10,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from models.database import SessionLocal, init_db
 from routes.admin_routes import register_admin_routes
 from routes.api_routes import register_api_routes
+from routes.auth_routes import register_auth_routes
 from routes.health_routes import register_health_routes
 from routes.user_routes import register_user_routes
-from utils.web_security import inject_csrf_token, validate_csrf_or_reject
+from utils.web_security import bind_tenant_context, inject_csrf_token, validate_csrf_or_reject
+from utils.basic_auth import admin_credentials_configured
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
@@ -27,9 +29,11 @@ def _inject_csrf_token():
 @app.before_request
 def validate_csrf():
     app.config["SESSION_LOCAL_FACTORY"] = SessionLocal
+    bind_tenant_context()
     return validate_csrf_or_reject(app)
 
 register_user_routes(app)
+register_auth_routes(app)
 register_admin_routes(app)
 register_api_routes(app, logger)
 register_health_routes(app)
@@ -38,6 +42,11 @@ register_health_routes(app)
 if __name__ == '__main__':
     # Инициализация базы данных
     init_db()
+
+    if not admin_credentials_configured():
+        logger.warning(
+            "ADMIN_USERNAME/ADMIN_PASSWORD not set: /contacts, /admin and export APIs are locked (503)."
+        )
     
     # Запуск Flask сервера
     # SECURITY: Bind to localhost only (not all interfaces)

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% import "includes/components.html" as ui %}
+
+{% block title %}Admin Console — Вход{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        {{ ui.page_header("🛠️ Admin Console", "Войдите, чтобы открыть панель администратора") }}
+
+        <div class="panel login-card">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% if telegram_auth_enabled and telegram_bot_username %}
+            <h2>Вход через Telegram</h2>
+            <p class="muted mb-10">Быстрый вход для администратора через Telegram-аккаунт.</p>
+            <div id="telegram-login" class="mb-10">
+                <script async src="https://telegram.org/js/telegram-widget.js?22"
+                        data-telegram-login="{{ telegram_bot_username }}"
+                        data-size="large"
+                        data-auth-url="{{ url_for('admin_dashboard') }}"
+                        data-request-access="write"></script>
+            </div>
+            {% else %}
+            <p class="muted">Telegram-авторизация не настроена на сервере.</p>
+            {% endif %}
+
+            <h2>Вход по паролю</h2>
+            <form method="POST" action="{{ url_for('auth_login') }}" class="settings-form">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ next_url }}">
+                <label for="username">Логин</label>
+                <input type="text" id="username" name="username" required autocomplete="username">
+                <label for="password">Пароль</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+                <button type="submit" class="btn btn-primary">Войти</button>
+            </form>
+        </div>
+    </div>
+{% endblock %}

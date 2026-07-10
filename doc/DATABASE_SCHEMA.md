@@ -4,7 +4,41 @@
 
 This document describes the database schema for B2B Contact Miner with detailed field descriptions.
 
+**Multi-tenant:** each company (`tenants`) has isolated data via `tenant_id` on business tables. Users authenticate against `users`. See [AUTH_MULTITENANT.md](AUTH_MULTITENANT.md).
+
 ## Tables
+
+### 0. `tenants` — Organizations
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INT | Unique identifier |
+| `slug` | VARCHAR(64) | Unique slug (e.g. `company`) |
+| `name` | VARCHAR(255) | Display name |
+| `is_active` | BOOLEAN | Tenant enabled |
+| `settings_json` | TEXT | Optional JSON settings |
+| `created_at` | DATETIME | Created |
+| `updated_at` | DATETIME | Updated |
+
+---
+
+### 0b. `users` — Login accounts
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INT | Unique identifier |
+| `tenant_id` | INT | FK → `tenants.id` |
+| `username` | VARCHAR(128) | Login (unique per tenant) |
+| `password_hash` | VARCHAR(255) | Werkzeug hash (nullable for Telegram-only) |
+| `telegram_id` | INT | Telegram user id (unique, nullable) |
+| `display_name` | VARCHAR(255) | UI label |
+| `role` | ENUM | `viewer`, `member`, `owner`, `super_admin` |
+| `is_active` | BOOLEAN | Account enabled |
+| `last_login_at` | DATETIME | Last successful login |
+| `created_at` | DATETIME | Created |
+| `updated_at` | DATETIME | Updated |
+
+---
 
 ### 1. `keywords` - Search Keywords
 
@@ -13,6 +47,8 @@ Stores search queries to process (e.g., "IT companies Moscow").
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | INT | Unique identifier |
+| `tenant_id` | INT | FK → `tenants.id` (owning company) |
+| `created_by_user_id` | INT | FK → `users.id` (who added keyword) |
 | `keyword` | VARCHAR(500) | Search query text |
 | `language` | VARCHAR(10) | Language code (ru, en, etc.) |
 | `country` | VARCHAR(5) | Country code (RU, US, etc.) |
@@ -23,8 +59,8 @@ Stores search queries to process (e.g., "IT companies Moscow").
 
 **Indexes:**
 - PRIMARY KEY (`id`)
-- UNIQUE (`keyword`)
-- INDEX (`keyword`)
+- UNIQUE (`tenant_id`, `keyword`, `language`, `country`)
+- INDEX (`tenant_id`)
 
 ---
 
@@ -35,6 +71,7 @@ Stores search engine results pages (SERP) for each keyword.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | INT | Unique identifier |
+| `tenant_id` | INT | FK → `tenants.id` |
 | `keyword_id` | INT | Foreign key to keywords table |
 | `url` | VARCHAR(768) | Website URL from search results |
 | `title` | VARCHAR(1000) | Page title from SERP |
@@ -60,6 +97,7 @@ Aggregated contact information and metadata for each domain.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | INT | Unique identifier |
+| `tenant_id` | INT | FK → `tenants.id` |
 | `search_result_id` | INT | Foreign key to search_results table |
 | `domain` | VARCHAR(500) | Domain name (e.g., example.com) |
 | `tags` | JSON | Tags/categories extracted from website |
@@ -88,6 +126,7 @@ Normalized individual contact records for efficient searching.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | INT | Unique identifier |
+| `tenant_id` | INT | FK → `tenants.id` |
 | `domain_contact_id` | INT | Foreign key to domain_contacts table |
 | `contact_type` | ENUM | Type: email, telegram, linkedin, phone |
 | `value` | VARCHAR(500) | Contact value (email address, phone number, etc.) |
@@ -117,6 +156,7 @@ Logs of all website crawling operations for debugging and monitoring.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | INT | Unique identifier |
+| `tenant_id` | INT | FK → `tenants.id` (optional) |
 | `domain` | VARCHAR(500) | Domain that was crawled |
 | `url` | VARCHAR(2000) | Specific URL crawled |
 | `status_code` | INT | HTTP status code (200, 404, 500, etc.) |
@@ -141,6 +181,7 @@ Tracks the state and progress of pipeline runs.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | INT | Unique identifier |
+| `tenant_id` | INT | FK → `tenants.id` (optional) |
 | `run_id` | VARCHAR(100) | Pipeline run identifier (shared across checkpoint rows for the same run) |
 | `keyword_id` | INT | Current keyword being processed |
 | `status` | VARCHAR(50) | Status: pending, running, completed, failed |
@@ -181,6 +222,7 @@ Persistent task queue for reliable asynchronous processing.
 | `error_message` | TEXT | Error message if task failed |
 | `result` | TEXT | JSON serialized task result/output |
 | `keyword_id` | INT | Associated keyword ID for tracking |
+| `tenant_id` | INT | FK → `tenants.id` (optional) |
 | `depends_on_task_id` | INT | Parent task ID - this task waits for parent completion |
 | `created_at` | DATETIME | Task creation timestamp |
 | `started_at` | DATETIME | Task execution start timestamp |
@@ -219,7 +261,9 @@ Persistent task queue for reliable asynchronous processing.
 ## Entity Relationships
 
 ```
-keywords (1) ──────< search_results (N)
+tenants (1) ──────< users (N)
+
+tenants (1) ──────< keywords (N) ──────< search_results (N)
                                │
                                └──> domain_contacts (1) ──────< contacts (N)
                                       │
@@ -227,7 +271,7 @@ keywords (1) ──────< search_results (N)
 
 pipeline_state ──> keywords
 
-task_queue ──> keywords (optional)
+task_queue ──> keywords (optional), tenant_id
      │
      └──> task_queue (self-reference for dependencies)
 ```

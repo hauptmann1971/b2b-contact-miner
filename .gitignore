@@ -27,7 +27,10 @@ ENV/
 .venv
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
 .idea/
 *.swp
 *.swo
@@ -68,7 +71,24 @@ sonar.env.txt
 # SonarQube/SonarCloud
 .scannerwork/
 doc/sonarcloud_reports/
+sonar.env.txt
+
+# Local archive (superseded docs, one-off scripts)
+archive/*
+!archive/README.md
+
+# IDE / local tooling
+.cursor/
+.lingma/
+
+# Runtime state
+data/
+pids/
+artifacts/
 
 # Exported data
 *.csv
 contacts_export.csv
+
+# Runtime app settings (password hash, theme)
+data/app_settings.json

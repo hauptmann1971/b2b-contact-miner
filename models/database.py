@@ -1,10 +1,19 @@
+import os
+import enum
+from datetime import datetime
+
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, JSON, ForeignKey, Index, Enum, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-from datetime import datetime
+
 from config.settings import settings
-import enum
 
 Base = declarative_base()
+
+
+def _database_url() -> str:
+    """Prefer live env (CI) over cached settings; avoid pymysql localhost socket."""
+    url = os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+    return url.replace("@localhost:", "@127.0.0.1:")
 
 _COMMENT_ID = "Unique identifier"
 _COMMENT_CREATED_AT = "Record creation timestamp"
@@ -12,7 +21,7 @@ _COMMENT_UPDATED_AT = "Last update timestamp"
 
 # MySQL connection with pool settings
 engine = create_engine(
-    settings.DATABASE_URL,
+    _database_url(),
     pool_size=20,
     max_overflow=30,
     pool_recycle=3600,  # MySQL closes idle connections after 8 hours

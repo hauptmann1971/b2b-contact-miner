@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from werkzeug.security import generate_password_hash
 
 from models.database import SessionLocal, engine
@@ -48,12 +49,16 @@ def _migrate_keyword_indexes() -> None:
             if name in legacy_indexes or (idx.get("unique") and column_names == ["keyword"]):
                 conn.execute(text(f"ALTER TABLE keywords DROP INDEX `{name}`"))
         if "idx_keywords_tenant_keyword" not in _index_names("keywords"):
-            conn.execute(
-                text(
-                    "CREATE UNIQUE INDEX idx_keywords_tenant_keyword "
-                    "ON keywords (tenant_id, keyword, language, country)"
+            try:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX idx_keywords_tenant_keyword "
+                        "ON keywords (tenant_id, keyword, language, country)"
+                    )
                 )
-            )
+            except (OperationalError, ProgrammingError) as exc:
+                if "Duplicate" not in str(exc):
+                    raise
 
 
 def _add_tenant_columns_if_missing() -> None:

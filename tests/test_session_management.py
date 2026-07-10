@@ -14,6 +14,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 class TestDatabaseSessionManagement:
     """Test database session management improvements"""
 
+    @pytest.fixture
+    def pipeline(self):
+        """Pipeline without touching the real database."""
+        with patch("main.init_db"):
+            from main import ContactMiningPipeline
+
+            pipeline = ContactMiningPipeline()
+            self._attach_mock_queue(pipeline)
+            return pipeline
+
     @staticmethod
     def _attach_mock_queue(pipeline):
         """Attach mocked task queue for orchestrator-mode tests."""
@@ -41,14 +51,8 @@ class TestDatabaseSessionManagement:
         return keyword
     
     @pytest.mark.asyncio
-    async def test_separate_session_per_keyword(self):
+    async def test_separate_session_per_keyword(self, pipeline):
         """Test that each keyword gets its own database session"""
-        from main import ContactMiningPipeline
-        
-        pipeline = ContactMiningPipeline()
-        self._attach_mock_queue(pipeline)
-        
-        # Mock dependencies
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
                 with patch('main.KeywordService') as mock_keyword_service:
@@ -83,13 +87,8 @@ class TestDatabaseSessionManagement:
                             assert mock_session_local.call_count >= 1
     
     @pytest.mark.asyncio
-    async def test_session_closed_in_finally_block(self):
+    async def test_session_closed_in_finally_block(self, pipeline):
         """Test that keyword session is closed in finally block"""
-        from main import ContactMiningPipeline
-        
-        pipeline = ContactMiningPipeline()
-        self._attach_mock_queue(pipeline)
-        
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
                 with patch('main.KeywordService') as mock_keyword_service:
@@ -120,13 +119,8 @@ class TestDatabaseSessionManagement:
                                 mock_db_main.close.assert_called_once()
     
     @pytest.mark.asyncio
-    async def test_main_session_closed_at_end(self):
+    async def test_main_session_closed_at_end(self, pipeline):
         """Test that main session is closed at the end"""
-        from main import ContactMiningPipeline
-        
-        pipeline = ContactMiningPipeline()
-        self._attach_mock_queue(pipeline)
-        
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
                 with patch('main.KeywordService') as mock_keyword_service:
@@ -146,13 +140,8 @@ class TestDatabaseSessionManagement:
                         mock_db_main.close.assert_called_once()
     
     @pytest.mark.asyncio
-    async def test_session_isolation_between_keywords(self):
+    async def test_session_isolation_between_keywords(self, pipeline):
         """Test that sessions are isolated between keywords"""
-        from main import ContactMiningPipeline
-        
-        pipeline = ContactMiningPipeline()
-        self._attach_mock_queue(pipeline)
-        
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
                 with patch('main.KeywordService') as mock_keyword_service:
@@ -177,13 +166,8 @@ class TestDatabaseSessionManagement:
                             mock_db_main.close.assert_called_once()
     
     @pytest.mark.asyncio
-    async def test_session_not_leaked_on_exception(self):
+    async def test_session_not_leaked_on_exception(self, pipeline):
         """Test that session is not leaked when exception occurs"""
-        from main import ContactMiningPipeline
-        
-        pipeline = ContactMiningPipeline()
-        self._attach_mock_queue(pipeline)
-        
         with patch.object(pipeline, 'initialize', new_callable=AsyncMock):
             with patch('main.SessionLocal') as mock_session_local:
                 with patch('main.KeywordService') as mock_keyword_service:

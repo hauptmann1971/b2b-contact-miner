@@ -21,13 +21,20 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -uroot -proot"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
 
     env:
       DATABASE_URL: mysql+pymysql://root:root@127.0.0.1:3306/contact_miner?charset=utf8mb4
+      ADMIN_USERNAME: testadmin
+      ADMIN_PASSWORD: testpass
+      TELEGRAM_BOT_TOKEN: "123456:ABC-DEF"
+      TELEGRAM_BOT_USERNAME: test_bot
+      ADMIN_TELEGRAM_IDS: "42"
+      DEFAULT_TENANT_SLUG: company
+      DEFAULT_TENANT_NAME: Company
 
     steps:
       - uses: actions/checkout@v4
@@ -47,11 +54,23 @@ jobs:
       - name: Wait for MySQL
         run: |
           for i in $(seq 1 30); do
-            mysqladmin ping -h 127.0.0.1 -uroot -proot --silent && exit 0
+            mysql -h 127.0.0.1 -uroot -proot -e "SELECT 1" contact_miner && exit 0
             sleep 2
           done
           echo "MySQL did not become ready in time"
           exit 1
+
+      - name: Verify database connection
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+          url = os.environ["DATABASE_URL"]
+          print("DATABASE_URL:", url)
+          engine = create_engine(url)
+          with engine.connect() as conn:
+              print("SELECT 1 =>", conn.execute(text("SELECT 1")).scalar())
+          PY
 
       - name: Run tests
         run: python -m pytest tests/ -q --tb=short

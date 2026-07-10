@@ -3,13 +3,12 @@ import os
 import pytest
 from werkzeug.security import generate_password_hash
 
-from models.database import SessionLocal
-from models.tenant import Tenant, User, UserRole
-from services.tenant_bootstrap import bootstrap_default_tenant, ensure_multitenant_schema
-
 
 def _ensure_test_owner() -> None:
     """Guarantee testadmin owner for pytest even when prod owner already exists."""
+    from models.database import SessionLocal
+    from models.tenant import Tenant, User, UserRole
+
     db = SessionLocal()
     try:
         slug = os.getenv("DEFAULT_TENANT_SLUG", "test-company").strip() or "test-company"
@@ -35,8 +34,17 @@ def _ensure_test_owner() -> None:
         db.close()
 
 
+@pytest.fixture(scope="session")
+def _db_ready():
+    from services.tenant_bootstrap import bootstrap_default_tenant, ensure_multitenant_schema
+
+    ensure_multitenant_schema()
+    bootstrap_default_tenant()
+    yield
+
+
 @pytest.fixture
-def app(monkeypatch, tmp_path):
+def app(monkeypatch, tmp_path, _db_ready):
     settings_file = tmp_path / "app_settings.json"
     monkeypatch.setenv("APP_SETTINGS_PATH", str(settings_file))
     monkeypatch.setenv("ADMIN_USERNAME", "testadmin")
@@ -47,8 +55,6 @@ def app(monkeypatch, tmp_path):
     monkeypatch.setenv("DEFAULT_TENANT_SLUG", "company")
     monkeypatch.setenv("DEFAULT_TENANT_NAME", "Company")
 
-    ensure_multitenant_schema()
-    bootstrap_default_tenant()
     _ensure_test_owner()
 
     from web_server import app as flask_app

@@ -5,7 +5,7 @@ import os
 
 class Settings(BaseSettings):
     # Database (MySQL by default, PostgreSQL also supported)
-    DATABASE_URL: str = "mysql+pymysql://user:password@localhost:3306/contact_miner"
+    DATABASE_URL: str = "mysql+pymysql://user:password@127.0.0.1:3306/contact_miner"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

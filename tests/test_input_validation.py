@@ -115,7 +115,12 @@ class TestSecretKeyGeneration:
     assert app.secret_key != "b2b-contact-miner-secret-key"
 
   def test_secret_key_is_generated(self):
-    with patch.dict(os.environ, {}, clear=True):
+    preserved = {
+      key: os.environ[key]
+      for key in ("DATABASE_URL", "SECRET_KEY")
+      if key in os.environ
+    }
+    with patch.dict(os.environ, preserved, clear=True):
       import web_server
 
       importlib.reload(web_server)

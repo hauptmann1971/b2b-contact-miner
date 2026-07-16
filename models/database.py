@@ -2,7 +2,7 @@ import os
 import enum
 from datetime import datetime
 
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, JSON, ForeignKey, Index, Enum, text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, JSON, ForeignKey, Index, Enum
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 from config.settings import settings
@@ -89,7 +89,9 @@ class SearchResult(Base):
     domain_contacts = relationship("DomainContact", back_populates="search_result")
     
     __table_args__ = (
-        Index('idx_keyword_url', 'keyword_id', text('url(255)'), unique=True, mysql_length={'url': 255}),
+        # mysql_length prefixes url for InnoDB index byte limit (utf8mb4).
+        # Do not use text('url(255)') — MySQL DDL compiler requires Column.name.
+        Index('idx_keyword_url', 'keyword_id', 'url', unique=True, mysql_length={'url': 255}),
     )
 
 
